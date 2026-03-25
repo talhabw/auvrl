@@ -1,0 +1,16 @@
+--- git commit ---
+9d24182c98fc0bc83e7e0e2a0eff86f5028c6fb9
+
+
+--- git status ---
+On branch roll
+Your branch is up to date with 'origin/roll'.
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/
+
+nothing added to commit but untracked files present (use "git add" to track) 
+
+
+--- git diff ---

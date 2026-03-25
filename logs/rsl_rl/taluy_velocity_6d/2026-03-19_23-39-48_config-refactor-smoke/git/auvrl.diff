@@ -1,0 +1,866 @@
+--- git commit ---
+bb51cb8c42a36d623b8a9c3f1e18fa6aeef0d531
+
+
+--- git status ---
+On branch vel_track
+Your branch is ahead of 'github/vel_track' by 1 commit.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   HANDOFF_TALUY_MJLAB.md
+	modified:   README.md
+	modified:   examples/mjlab_env_randomization_smoke.py
+	modified:   examples/mjlab_env_smoke.py
+	modified:   src/auvrl/mjlab/__init__.py
+	modified:   src/auvrl/mjlab/auv_env_cfg.py
+	modified:   src/auvrl/mjlab/t200_thruster_actuator.py
+	modified:   src/auvrl/mujoco/thruster_dynamics.py
+	modified:   src/auvrl/mujoco/vehicle_configs/taluy_config.py
+	modified:   src/auvrl/mujoco/vehicle_configs/taluy_hydro.yaml
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/rsl_rl/taluy_velocity_6d/2026-03-19_23-39-48_config-refactor-smoke/
+	src/auvrl/mujoco/actuator_configs/
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/HANDOFF_TALUY_MJLAB.md b/HANDOFF_TALUY_MJLAB.md
+index 7e44604..a0f8706 100644
+--- a/HANDOFF_TALUY_MJLAB.md
++++ b/HANDOFF_TALUY_MJLAB.md
+@@ -11,7 +11,8 @@ Continue from the current Taluy + MJLab integration and move toward a first trai
+    - New `make_taluy_auv_env_cfg(...)` loads `mujoco_model/taluy_mjcf.xml`, wires:
+      - `T200ThrusterActuatorCfg` in `force_target` mode (8 sites)
+      - `UnderwaterHydroActionCfg` using Taluy hydro params from `taluy_config`
+-   - Minimal env builder remains intact (`make_minimal_auv_env_cfg`).
++   - The old minimal env builder has since been removed; Taluy is the canonical
++     MJLab env entry point.
+ 
+ 2. Exported new env builder.
+    - `src/auvrl/mjlab/__init__.py`
+diff --git a/README.md b/README.md
+index 673e791..163c692 100644
+--- a/README.md
++++ b/README.md
+@@ -10,6 +10,9 @@ Source layout uses two main folders:
+ - `src/auvrl/mjlab/` for project-local MJLab extensions.
+ 
+ - MuJoCo stack (original external hydro setup): `src/auvrl/mujoco/`
++  - `src/auvrl/mujoco/actuator_configs/`
++    - `src/auvrl/mujoco/actuator_configs/t200_config.py`
++    - `src/auvrl/mujoco/actuator_configs/t200.yaml`
+   - `src/auvrl/mujoco/external_hydro.py`
+   - `src/auvrl/mujoco/hydrodynamics.py`
+   - `src/auvrl/mujoco/thruster_dynamics.py`
+@@ -57,6 +60,9 @@ Source layout uses two main folders:
+   allocator and T200 SITE actuator now treat this as fixed convention rather
+   than configurable parameter. If thrust points the wrong way, rotate the site
+   frame in MJCF instead of adding a custom `local_force_axis` setting.
++- Taluy vehicle YAML now only declares which shared thruster model it uses plus
++  vehicle-specific site ordering/channel mapping. Shared T200 actuator settings
++  live in `src/auvrl/mujoco/actuator_configs/t200.yaml`.
+ 
+ ## MJLab dependency setup (uv)
+ 
+diff --git a/examples/mjlab_env_randomization_smoke.py b/examples/mjlab_env_randomization_smoke.py
+index 5b24f17..f4c90d4 100644
+--- a/examples/mjlab_env_randomization_smoke.py
++++ b/examples/mjlab_env_randomization_smoke.py
+@@ -35,7 +35,7 @@ except ModuleNotFoundError as exc:
+ from auvrl.mjlab import (  # type: ignore[import-not-found]
+     T200ThrusterActuator,
+     UnderwaterHydroAction,
+-    make_minimal_auv_env_cfg,
++    make_taluy_auv_env_cfg,
+ )
+ 
+ 
+@@ -72,10 +72,11 @@ def _assert_finite_env_state(env: ManagerBasedRlEnv) -> None:
+ 
+ 
+ def _make_randomized_env() -> ManagerBasedRlEnv:
+-    cfg = make_minimal_auv_env_cfg(
++    cfg = make_taluy_auv_env_cfg(
+         num_envs=8,
+         decimation=4,
+         physics_dt_s=0.002,
++        action_space="thruster",
+         thruster_voltage_randomization_mode="reset",
+         thruster_voltage_range_v=THRUSTER_VOLTAGE_RANGE_V,
+         current_randomization_mode="reset",
+diff --git a/examples/mjlab_env_smoke.py b/examples/mjlab_env_smoke.py
+index f964080..9b4fd69 100644
+--- a/examples/mjlab_env_smoke.py
++++ b/examples/mjlab_env_smoke.py
+@@ -1,4 +1,4 @@
+-"""Integration smoke tests for the minimal MJLab AUV environment."""
++"""Integration smoke tests for the Taluy MJLab thruster environment."""
+ 
+ from __future__ import annotations
+ 
+@@ -26,7 +26,7 @@ except ModuleNotFoundError as exc:
+         "Could not import mjlab. Ensure mjlab is available (local ../mjlab or installed dependency)."
+     ) from exc
+ 
+-from auvrl.mjlab import make_minimal_auv_env_cfg  # type: ignore[import-not-found]
++from auvrl.mjlab import make_taluy_auv_env_cfg  # type: ignore[import-not-found]
+ 
+ 
+ @dataclass
+@@ -44,10 +44,11 @@ def _device() -> str:
+ 
+ 
+ def _make_env(decimation: int, physics_dt_s: float = 0.002) -> ManagerBasedRlEnv:
+-    cfg = make_minimal_auv_env_cfg(
++    cfg = make_taluy_auv_env_cfg(
+         num_envs=1,
+         decimation=decimation,
+         physics_dt_s=physics_dt_s,
++        action_space="thruster",
+     )
+     return ManagerBasedRlEnv(cfg=cfg, device=_device())
+ 
+@@ -146,18 +147,18 @@ def _check_single_thruster_signs() -> None:
+             env,
+             total_time_s=1.5,
+             pulse_thruster_idx=0,
+-            pulse_command=0.6,
++            pulse_command=30.0,
+             pulse_duration_s=0.5,
+         )
+     finally:
+         env.close()
+ 
+-    if stats.max_surge_vel <= 0.05:
++    if stats.max_surge_vel <= 0.02:
+         raise AssertionError(
+             "Single-thruster pulse did not create positive surge velocity. "
+             f"Observed max surge: {stats.max_surge_vel:.4f} m/s"
+         )
+-    if stats.min_yaw_vel >= -0.02:
++    if stats.min_yaw_vel >= -0.01:
+         raise AssertionError(
+             "Single-thruster pulse did not create expected negative yaw rate. "
+             f"Observed min yaw: {stats.min_yaw_vel:.4f} rad/s"
+@@ -176,7 +177,7 @@ def _check_decimation_consistency() -> None:
+             env_dec1,
+             total_time_s=1.0,
+             pulse_thruster_idx=0,
+-            pulse_command=0.5,
++            pulse_command=25.0,
+             pulse_duration_s=1.0,
+         )
+     finally:
+@@ -188,7 +189,7 @@ def _check_decimation_consistency() -> None:
+             env_dec4,
+             total_time_s=1.0,
+             pulse_thruster_idx=0,
+-            pulse_command=0.5,
++            pulse_command=25.0,
+             pulse_duration_s=1.0,
+         )
+     finally:
+@@ -215,7 +216,7 @@ def main() -> None:
+     _check_zero_action_trim()
+     _check_single_thruster_signs()
+     _check_decimation_consistency()
+-    print("MJLab integrated AUV env smoke checks passed.")
++    print("Taluy MJLab thruster env smoke checks passed.")
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/auvrl/mjlab/__init__.py b/src/auvrl/mjlab/__init__.py
+index e842f30..a3885b7 100644
+--- a/src/auvrl/mjlab/__init__.py
++++ b/src/auvrl/mjlab/__init__.py
+@@ -9,7 +9,7 @@ from .tasks.velocity import (
+ )
+ from .t200_thruster_actuator import T200ThrusterActuator, T200ThrusterActuatorCfg
+ from .underwater_hydro_action import UnderwaterHydroAction, UnderwaterHydroActionCfg
+-from .auv_env_cfg import make_minimal_auv_env_cfg, make_taluy_auv_env_cfg
++from .auv_env_cfg import make_taluy_auv_env_cfg
+ from .events import (
+     randomize_thruster_supply_voltage,
+     randomize_water_current_velocity,
+@@ -25,7 +25,6 @@ __all__ = [
+     "T200ThrusterActuatorCfg",
+     "UnderwaterHydroAction",
+     "UnderwaterHydroActionCfg",
+-    "make_minimal_auv_env_cfg",
+     "make_taluy_auv_env_cfg",
+     "make_taluy_velocity_env_cfg",
+     "randomize_thruster_supply_voltage",
+diff --git a/src/auvrl/mjlab/auv_env_cfg.py b/src/auvrl/mjlab/auv_env_cfg.py
+index 4a9dbfb..c8d4d05 100644
+--- a/src/auvrl/mjlab/auv_env_cfg.py
++++ b/src/auvrl/mjlab/auv_env_cfg.py
+@@ -1,4 +1,4 @@
+-"""Minimal integrated MJLab environment config for AUV smoke testing."""
++"""Taluy MJLab environment config helpers."""
+ 
+ from __future__ import annotations
+ 
+@@ -20,7 +20,6 @@ from mjlab.scene import SceneCfg
+ from mjlab.sim import MujocoCfg, SimulationCfg
+ 
+ from auvrl.mujoco.vehicle_configs import taluy_config
+-from auvrl.mujoco.thruster_dynamics import T200_THRUSTER_LOCAL_FORCE_AXIS
+ 
+ from .events import (
+     randomize_thruster_supply_voltage,
+@@ -30,21 +29,6 @@ from .body_wrench_action import BodyWrenchActionCfg
+ from .t200_thruster_actuator import T200ThrusterActuatorCfg
+ from .underwater_hydro_action import UnderwaterHydroActionCfg
+ 
+-MINIMAL_AUV_MJCF = """
+-<mujoco>
+-  <worldbody>
+-    <body name="base" pos="0 0 0">
+-      <freejoint name="root"/>
+-      <geom name="hull" type="box" size="0.25 0.12 0.08" mass="8.0"/>
+-      <site name="thruster_0" pos="0.16 0.14 0.0"/>
+-      <site name="thruster_1" pos="0.16 -0.14 0.0"/>
+-      <site name="thruster_2" pos="-0.16 0.14 0.0"/>
+-      <site name="thruster_3" pos="-0.16 -0.14 0.0"/>
+-    </body>
+-  </worldbody>
+-</mujoco>
+-"""
+-
+ RandomizationMode = Literal["disabled", "startup", "reset"]
+ TaluyActionSpace = Literal["thruster", "body_wrench"]
+ 
+@@ -72,165 +56,6 @@ def _validate_taluy_action_space(value: TaluyActionSpace) -> None:
+         )
+ 
+ 
+-def _coerce_supply_voltage(value: float | np.ndarray) -> float | tuple[float, ...]:
+-    array = np.asarray(value, dtype=float)
+-    if array.ndim == 0:
+-        return float(array.item())
+-    return tuple(float(item) for item in array.reshape(-1))
+-
+-
+-def make_minimal_auv_env_cfg(
+-    *,
+-    num_envs: int = 1,
+-    decimation: int = 4,
+-    physics_dt_s: float = 0.002,
+-    thruster_voltage_randomization_mode: RandomizationMode = "disabled",
+-    thruster_voltage_range_v: tuple[float, float] = (14.0, 18.0),
+-    current_randomization_mode: RandomizationMode = "disabled",
+-    current_speed_range_m_s: tuple[float, float] = (0.0, 0.5),
+-    current_yaw_range_rad: tuple[float, float] = (
+-        -3.141592653589793,
+-        3.141592653589793,
+-    ),
+-    vertical_current_range_m_s: tuple[float, float] = (-0.1, 0.1),
+-) -> ManagerBasedRlEnvCfg:
+-    """Create a minimal AUV MJLab environment.
+-
+-    This config intentionally focuses on integration sanity:
+-    - per-thruster command path through ``SiteEffortActionCfg`` and
+-      ``T200ThrusterActuatorCfg``;
+-    - per-substep hydrodynamics via ``UnderwaterHydroActionCfg`` with
+-      ``action_dim = 0``.
+-    """
+-
+-    if num_envs <= 0:
+-        raise ValueError("num_envs must be positive")
+-    if decimation <= 0:
+-        raise ValueError("decimation must be positive")
+-    if physics_dt_s <= 0.0:
+-        raise ValueError("physics_dt_s must be positive")
+-    _validate_randomization_mode(
+-        "thruster_voltage_randomization_mode", thruster_voltage_randomization_mode
+-    )
+-    _validate_randomization_mode(
+-        "current_randomization_mode", current_randomization_mode
+-    )
+-    _validate_range("thruster_voltage_range_v", thruster_voltage_range_v)
+-    _validate_range("current_speed_range_m_s", current_speed_range_m_s)
+-    _validate_range("current_yaw_range_rad", current_yaw_range_rad)
+-    _validate_range("vertical_current_range_m_s", vertical_current_range_m_s)
+-
+-    robot_entity_cfg = EntityCfg(
+-        spec_fn=lambda: mujoco.MjSpec.from_string(MINIMAL_AUV_MJCF),  # type: ignore[attr-defined]
+-        articulation=EntityArticulationInfoCfg(
+-            actuators=(
+-                T200ThrusterActuatorCfg(
+-                    target_names_expr=("thruster_.*",),
+-                    mode="normalized",
+-                    tau_s=0.08,
+-                    command_limit=1.0,
+-                    deadzone=0.02,
+-                    min_thrust_n=-35.0,
+-                    max_thrust_n=35.0,
+-                    normalized_thrust_coeffs_forward=(0.0, 30.0, 0.0),
+-                    normalized_thrust_coeffs_reverse=(0.0, 30.0, 0.0),
+-                    site_gear=(1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+-                ),
+-            )
+-        ),
+-    )
+-
+-    actions: dict[str, ActionTermCfg] = {
+-        "thrusters": SiteEffortActionCfg(
+-            entity_name="robot",
+-            actuator_names=("thruster_.*",),
+-            scale=1.0,
+-            offset=0.0,
+-        ),
+-        "hydro": UnderwaterHydroActionCfg(
+-            entity_name="robot",
+-            body_name="base",
+-            linear_drag=(9.0, 9.0, 14.0),
+-            quadratic_drag=(24.0, 24.0, 38.0),
+-            angular_drag=(1.8, 1.8, 2.6),
+-            current_velocity_w=(0.0, 0.0, 0.0),
+-            fluid_density_kg_m3=997.0,
+-            gravity_m_s2=9.81,
+-            displaced_volume_m3=8.0 / 997.0,
+-            center_of_buoyancy_b_m=(0.0, 0.0, 0.0),
+-            center_of_gravity_b_m=(0.0, 0.0, 0.0),
+-            restoring_mode="weight_buoyancy",
+-            dry_mass_kg=8.0,
+-        ),
+-    }
+-
+-    observations = {
+-        "policy": ObservationGroupCfg(
+-            terms={
+-                "last_action": ObservationTermCfg(func=mdp.last_action),
+-            },
+-            enable_corruption=False,
+-        )
+-    }
+-
+-    terminations = {
+-        "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
+-    }
+-
+-    events: dict[str, EventTermCfg] = {
+-        "reset_scene_to_default": EventTermCfg(
+-            func=mdp.reset_scene_to_default, mode="reset"
+-        ),
+-    }
+-
+-    if thruster_voltage_randomization_mode != "disabled":
+-        events["randomize_thruster_supply_voltage"] = EventTermCfg(
+-            func=randomize_thruster_supply_voltage,
+-            mode=thruster_voltage_randomization_mode,
+-            params={
+-                "entity_name": "robot",
+-                "voltage_range": thruster_voltage_range_v,
+-            },
+-        )
+-
+-    if current_randomization_mode != "disabled":
+-        events["randomize_water_current_velocity"] = EventTermCfg(
+-            func=randomize_water_current_velocity,
+-            mode=current_randomization_mode,
+-            params={
+-                "action_term_name": "hydro",
+-                "speed_range_m_s": current_speed_range_m_s,
+-                "yaw_range_rad": current_yaw_range_rad,
+-                "vertical_range_m_s": vertical_current_range_m_s,
+-            },
+-        )
+-
+-    return ManagerBasedRlEnvCfg(
+-        scene=SceneCfg(
+-            num_envs=num_envs,
+-            env_spacing=2.0,
+-            entities={
+-                "robot": robot_entity_cfg,
+-            },
+-        ),
+-        observations=observations,
+-        actions=actions,
+-        events=events,
+-        terminations=terminations,
+-        sim=SimulationCfg(
+-            mujoco=MujocoCfg(
+-                timestep=physics_dt_s,
+-                gravity=(0.0, 0.0, 0.0),
+-                integrator="implicitfast",
+-                iterations=20,
+-                ls_iterations=40,
+-            )
+-        ),
+-        decimation=decimation,
+-        episode_length_s=20.0,
+-    )
+-
+-
+ def _taluy_spec():
+     spec = mujoco.MjSpec.from_file(str(_TALUY_XML_PATH))  # type: ignore[attr-defined]
+     spec.meshdir = str(_TALUY_XML_PATH.parent)
+@@ -258,6 +83,9 @@ def make_taluy_auv_env_cfg(
+     When ``action_space="body_wrench"``, the policy emits a normalized 6D
+     body-wrench command in ``[-1, 1]^6`` that is scaled by
+     ``taluy_config.demo_wrench_limit()`` before control allocation.
++
++    Taluy-specific geometry comes from the vehicle config; shared T200 actuator
++    parameters come from the referenced actuator-model YAML.
+     """
+ 
+     if num_envs <= 0:
+@@ -292,7 +120,6 @@ def make_taluy_auv_env_cfg(
+     current_world = hydro_cfg.current_world_m_s
+     if current_world is None:
+         current_world = np.zeros(3, dtype=float)
+-    supply_voltage = _coerce_supply_voltage(thr_cfg.supply_voltage)
+     wrench_limit_values = taluy_config.demo_wrench_limit()
+     wrench_limit = (
+         float(wrench_limit_values[0]),
+@@ -307,30 +134,9 @@ def make_taluy_auv_env_cfg(
+         spec_fn=_taluy_spec,
+         articulation=EntityArticulationInfoCfg(
+             actuators=(
+-                T200ThrusterActuatorCfg(
++                T200ThrusterActuatorCfg.from_thruster_config(
+                     target_names_expr=("thruster_[0-7]_site",),
+-                    mode="force_target",
+-                    tau_s=float(thr_cfg.time_constant_s),
+-                    command_limit=float(thr_cfg.command_limit),
+-                    deadzone=float(thr_cfg.deadzone),
+-                    force_deadzone_n=float(thr_cfg.force_deadzone_n),
+-                    min_thrust_n=-float(thr_cfg.command_limit),
+-                    max_thrust_n=float(thr_cfg.command_limit),
+-                    supply_voltage=supply_voltage,
+-                    pwm_min_us=float(thr_cfg.pwm_min_us),
+-                    pwm_max_us=float(thr_cfg.pwm_max_us),
+-                    pwm_neutral_us=float(thr_cfg.pwm_neutral_us),
+-                    force_to_pwm_coeffs_forward=thr_cfg.force_to_pwm_coeffs_forward,
+-                    force_to_pwm_coeffs_reverse=thr_cfg.force_to_pwm_coeffs_reverse,
+-                    newton_per_kgf=float(thr_cfg.newton_per_kgf),
+-                    site_gear=(
+-                        float(T200_THRUSTER_LOCAL_FORCE_AXIS[0]),
+-                        float(T200_THRUSTER_LOCAL_FORCE_AXIS[1]),
+-                        float(T200_THRUSTER_LOCAL_FORCE_AXIS[2]),
+-                        0.0,
+-                        0.0,
+-                        0.0,
+-                    ),
++                    thruster_cfg=thr_cfg,
+                 ),
+             )
+         ),
+diff --git a/src/auvrl/mjlab/t200_thruster_actuator.py b/src/auvrl/mjlab/t200_thruster_actuator.py
+index 155f530..c67423b 100644
+--- a/src/auvrl/mjlab/t200_thruster_actuator.py
++++ b/src/auvrl/mjlab/t200_thruster_actuator.py
+@@ -4,13 +4,17 @@ from __future__ import annotations
+ 
+ import math
+ from dataclasses import dataclass
+-from typing import TYPE_CHECKING, Literal, Sequence
++from typing import TYPE_CHECKING, Literal, Sequence, cast
+ 
+ import mujoco
+ import mujoco_warp as mjwarp
++import numpy as np
+ import torch
+ 
+-from auvrl.mujoco.thruster_dynamics import T200_THRUSTER_LOCAL_FORCE_AXIS
++from auvrl.mujoco.thruster_dynamics import (
++    T200_THRUSTER_LOCAL_FORCE_AXIS,
++    ThrusterConfig,
++)
+ 
+ from mjlab.actuator.actuator import (
+     Actuator,
+@@ -76,15 +80,6 @@ class T200ThrusterActuatorCfg(ActuatorCfg):
+ 
+     newton_per_kgf: float = 9.81
+ 
+-    site_gear: tuple[float, float, float, float, float, float] = (
+-        T200_THRUSTER_LOCAL_FORCE_AXIS[0],
+-        T200_THRUSTER_LOCAL_FORCE_AXIS[1],
+-        T200_THRUSTER_LOCAL_FORCE_AXIS[2],
+-        0.0,
+-        0.0,
+-        0.0,
+-    )
+-
+     def __post_init__(self) -> None:
+         super().__post_init__()
+         if self.transmission_type != TransmissionType.SITE:
+@@ -107,8 +102,87 @@ class T200ThrusterActuatorCfg(ActuatorCfg):
+             raise ValueError("force_to_pwm_coeffs_forward must have 6 values.")
+         if len(self.force_to_pwm_coeffs_reverse) != 6:
+             raise ValueError("force_to_pwm_coeffs_reverse must have 6 values.")
+-        if len(self.site_gear) != 6:
+-            raise ValueError("site_gear must have 6 values.")
++
++    @classmethod
++    def from_thruster_config(
++        cls,
++        *,
++        target_names_expr: tuple[str, ...],
++        thruster_cfg: ThrusterConfig,
++    ) -> T200ThrusterActuatorCfg:
++        """Build an MJLab T200 actuator config from shared thruster settings."""
++        mode = thruster_cfg.command_model.strip().lower()
++        if mode not in {"force_target", "normalized"}:
++            raise ValueError(
++                "T200ThrusterActuatorCfg only supports command_model 'force_target' "
++                f"or 'normalized', got '{thruster_cfg.command_model}'."
++            )
++        actuator_mode = cast(Literal["force_target", "normalized"], mode)
++
++        if isinstance(thruster_cfg.supply_voltage, np.ndarray):
++            supply_voltage: float | Sequence[float] = tuple(
++                float(value) for value in thruster_cfg.supply_voltage.reshape(-1)
++            )
++        else:
++            supply_voltage = float(thruster_cfg.supply_voltage)
++
++        min_thrust_n = (
++            -float(thruster_cfg.command_limit)
++            if thruster_cfg.min_thrust_n is None
++            else float(thruster_cfg.min_thrust_n)
++        )
++        max_thrust_n = (
++            float(thruster_cfg.command_limit)
++            if thruster_cfg.max_thrust_n is None
++            else float(thruster_cfg.max_thrust_n)
++        )
++
++        normalized_thrust_coeffs_forward: tuple[float, float, float] = (
++            float(thruster_cfg.normalized_thrust_coeffs_forward[0]),
++            float(thruster_cfg.normalized_thrust_coeffs_forward[1]),
++            float(thruster_cfg.normalized_thrust_coeffs_forward[2]),
++        )
++        normalized_thrust_coeffs_reverse: tuple[float, float, float] = (
++            float(thruster_cfg.normalized_thrust_coeffs_reverse[0]),
++            float(thruster_cfg.normalized_thrust_coeffs_reverse[1]),
++            float(thruster_cfg.normalized_thrust_coeffs_reverse[2]),
++        )
++        force_to_pwm_coeffs_forward: tuple[float, float, float, float, float, float] = (
++            float(thruster_cfg.force_to_pwm_coeffs_forward[0]),
++            float(thruster_cfg.force_to_pwm_coeffs_forward[1]),
++            float(thruster_cfg.force_to_pwm_coeffs_forward[2]),
++            float(thruster_cfg.force_to_pwm_coeffs_forward[3]),
++            float(thruster_cfg.force_to_pwm_coeffs_forward[4]),
++            float(thruster_cfg.force_to_pwm_coeffs_forward[5]),
++        )
++        force_to_pwm_coeffs_reverse: tuple[float, float, float, float, float, float] = (
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[0]),
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[1]),
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[2]),
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[3]),
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[4]),
++            float(thruster_cfg.force_to_pwm_coeffs_reverse[5]),
++        )
++
++        return cls(
++            target_names_expr=target_names_expr,
++            mode=actuator_mode,
++            tau_s=float(thruster_cfg.time_constant_s),
++            command_limit=float(thruster_cfg.command_limit),
++            deadzone=float(thruster_cfg.deadzone),
++            force_deadzone_n=float(thruster_cfg.force_deadzone_n),
++            min_thrust_n=min_thrust_n,
++            max_thrust_n=max_thrust_n,
++            normalized_thrust_coeffs_forward=normalized_thrust_coeffs_forward,
++            normalized_thrust_coeffs_reverse=normalized_thrust_coeffs_reverse,
++            supply_voltage=supply_voltage,
++            pwm_min_us=float(thruster_cfg.pwm_min_us),
++            pwm_max_us=float(thruster_cfg.pwm_max_us),
++            pwm_neutral_us=float(thruster_cfg.pwm_neutral_us),
++            force_to_pwm_coeffs_forward=force_to_pwm_coeffs_forward,
++            force_to_pwm_coeffs_reverse=force_to_pwm_coeffs_reverse,
++            newton_per_kgf=float(thruster_cfg.newton_per_kgf),
++        )
+ 
+     def build(
+         self,
+@@ -146,7 +220,14 @@ class T200ThrusterActuator(Actuator[T200ThrusterActuatorCfg]):
+             actuator.dyntype = mujoco.mjtDyn.mjDYN_NONE
+             actuator.gaintype = mujoco.mjtGain.mjGAIN_FIXED
+             actuator.biastype = mujoco.mjtBias.mjBIAS_NONE
+-            actuator.gear[:] = self.cfg.site_gear
++            actuator.gear[:] = (
++                T200_THRUSTER_LOCAL_FORCE_AXIS[0],
++                T200_THRUSTER_LOCAL_FORCE_AXIS[1],
++                T200_THRUSTER_LOCAL_FORCE_AXIS[2],
++                0.0,
++                0.0,
++                0.0,
++            )
+ 
+             actuator.forcelimited = True
+             actuator.forcerange[:] = (-effort_limit, effort_limit)
+diff --git a/src/auvrl/mujoco/thruster_dynamics.py b/src/auvrl/mujoco/thruster_dynamics.py
+index fd4ee20..6a06f4b 100644
+--- a/src/auvrl/mujoco/thruster_dynamics.py
++++ b/src/auvrl/mujoco/thruster_dynamics.py
+@@ -169,6 +169,8 @@ class ThrusterConfig:
+     allocation_matrix_6xn: np.ndarray
+     time_constant_s: float = 0.08
+     command_limit: float = 100.0
++    min_thrust_n: float | None = None
++    max_thrust_n: float | None = None
+ 
+     # Legacy command->thrust model.
+     deadzone: float = 0.0
+@@ -176,6 +178,8 @@ class ThrusterConfig:
+     linear_gain_reverse: np.ndarray | float = 1.0
+     quadratic_gain_forward: np.ndarray | float = 0.0
+     quadratic_gain_reverse: np.ndarray | float = 0.0
++    normalized_thrust_coeffs_forward: tuple[float, float, float] = (0.0, 60.0, 0.0)
++    normalized_thrust_coeffs_reverse: tuple[float, float, float] = (0.0, 60.0, 0.0)
+ 
+     # Command model selector: "legacy", "isaac_pwm", or "force_target".
+     command_model: str = "legacy"
+diff --git a/src/auvrl/mujoco/vehicle_configs/taluy_config.py b/src/auvrl/mujoco/vehicle_configs/taluy_config.py
+index 498d4fa..67507a9 100644
+--- a/src/auvrl/mujoco/vehicle_configs/taluy_config.py
++++ b/src/auvrl/mujoco/vehicle_configs/taluy_config.py
+@@ -11,6 +11,7 @@ import mujoco
+ import numpy as np
+ import yaml
+ 
++from ..actuator_configs import default_t200_thruster_config
+ from ..external_hydro import (
+     ExternalHydroModel,
+     HydroConfig,
+@@ -28,15 +29,6 @@ _YAML_PATH = Path(__file__).with_name("taluy_hydro.yaml")
+ _AUVRL_ROOT = Path(__file__).resolve().parents[4]
+ 
+ 
+-def _as_scalar_or_vector(value: Any, field_name: str) -> float | np.ndarray:
+-    arr = np.asarray(value, dtype=float)
+-    if arr.ndim == 0:
+-        return float(arr)
+-    if arr.ndim == 1:
+-        return arr.copy()
+-    raise ValueError(f"{field_name} must be scalar or 1D array, got {arr.shape}")
+-
+-
+ def _require_matrix(config: dict[str, Any], key: str) -> np.ndarray:
+     if key not in config:
+         raise KeyError(f"Missing '{key}' in {_YAML_PATH}")
+@@ -117,6 +109,14 @@ def thruster_site_names() -> tuple[str, ...]:
+     return tuple(site_names)
+ 
+ 
++def thruster_model_name() -> str:
++    """Return the shared thruster-model name referenced by Taluy."""
++    model_name = str(_thruster_section().get("model", "t200")).strip().lower()
++    if not model_name:
++        raise ValueError(f"thruster.model must be a non-empty string in {_YAML_PATH}")
++    return model_name
++
++
+ def thruster_local_force_axis() -> tuple[float, float, float]:
+     """Return Taluy's fixed T200 local thrust axis (site local ``-Z``)."""
+     return THRUSTER_LOCAL_FORCE_AXIS
+@@ -335,135 +335,18 @@ def default_taluy_hydro_config() -> HydroConfig:
+ def default_taluy_thruster_config(
+     allocation_matrix_6xn: np.ndarray | None = None,
+ ) -> ThrusterConfig:
+-    """Return Taluy thruster config from YAML control limits."""
++    """Return Taluy thruster config from the referenced shared model YAML."""
+     if allocation_matrix_6xn is None:
+         raise ValueError(
+             "allocation_matrix_6xn is required. Compute it once from MuJoCo "
+             "using taluy_allocation_matrix(model, data)."
+         )
+ 
+-    thruster = _thruster_section()
+-    command_model = str(thruster.get("command_model", "isaac_pwm"))
+-    default_command_limit = (
+-        60.0 if command_model.strip().lower() == "force_target" else 1.0
+-    )
+-
+-    pwm_fwd = np.asarray(
+-        thruster.get("pwm_to_omega_forward", [-139.0, 500.0, 8.28]),
+-        dtype=float,
+-    ).reshape(-1)
+-    pwm_rev = np.asarray(
+-        thruster.get("pwm_to_omega_reverse", [161.0, 517.86, -5.72]),
+-        dtype=float,
+-    ).reshape(-1)
+-    if pwm_fwd.shape != (3,):
+-        raise ValueError(
+-            f"thruster.pwm_to_omega_forward must have 3 elements in {_YAML_PATH}"
+-        )
+-    if pwm_rev.shape != (3,):
+-        raise ValueError(
+-            f"thruster.pwm_to_omega_reverse must have 3 elements in {_YAML_PATH}"
+-        )
+-
+-    force_to_pwm_fwd = np.asarray(
+-        thruster.get(
+-            "force_to_pwm_coeffs_forward",
+-            [
+-                -7.65890867108129,
+-                -2.272619267631361,
+-                1.5070809906898863,
+-                140.79738360070297,
+-                -50.325593642656244,
+-                1954.5975713257544,
+-            ],
+-        ),
+-        dtype=float,
+-    ).reshape(-1)
+-    force_to_pwm_rev = np.asarray(
+-        thruster.get(
+-            "force_to_pwm_coeffs_reverse",
+-            [
+-                12.292935764557399,
+-                -3.0745135927968605,
+-                -1.0664649834600253,
+-                181.68212348405177,
+-                36.69456713973092,
+-                1151.1307183400536,
+-            ],
+-        ),
+-        dtype=float,
+-    ).reshape(-1)
+-    if force_to_pwm_fwd.shape != (6,):
+-        raise ValueError(
+-            f"thruster.force_to_pwm_coeffs_forward must have 6 elements in {_YAML_PATH}"
+-        )
+-    if force_to_pwm_rev.shape != (6,):
+-        raise ValueError(
+-            f"thruster.force_to_pwm_coeffs_reverse must have 6 elements in {_YAML_PATH}"
+-        )
+-
+-    return ThrusterConfig(
+-        allocation_matrix_6xn=np.asarray(allocation_matrix_6xn, dtype=float),
+-        time_constant_s=float(thruster.get("time_constant_s", 0.05)),
+-        command_limit=float(thruster.get("command_limit", default_command_limit)),
+-        command_model=command_model,
+-        deadzone=float(thruster.get("deadzone", 0.0)),
+-        linear_gain_forward=_as_scalar_or_vector(
+-            thruster.get("linear_gain_forward", 1.0),
+-            "thruster.linear_gain_forward",
+-        ),
+-        linear_gain_reverse=_as_scalar_or_vector(
+-            thruster.get("linear_gain_reverse", 1.0),
+-            "thruster.linear_gain_reverse",
+-        ),
+-        quadratic_gain_forward=_as_scalar_or_vector(
+-            thruster.get("quadratic_gain_forward", 0.0),
+-            "thruster.quadratic_gain_forward",
+-        ),
+-        quadratic_gain_reverse=_as_scalar_or_vector(
+-            thruster.get("quadratic_gain_reverse", 0.0),
+-            "thruster.quadratic_gain_reverse",
+-        ),
+-        pwm_deadzone=float(thruster.get("pwm_deadzone", 0.08)),
+-        pwm_to_omega_forward=(
+-            float(pwm_fwd[0]),
+-            float(pwm_fwd[1]),
+-            float(pwm_fwd[2]),
+-        ),
+-        pwm_to_omega_reverse=(
+-            float(pwm_rev[0]),
+-            float(pwm_rev[1]),
+-            float(pwm_rev[2]),
+-        ),
+-        rotor_constant=_as_scalar_or_vector(
+-            thruster.get("rotor_constant", 0.001),
+-            "thruster.rotor_constant",
+-        ),
+-        force_deadzone_n=float(thruster.get("force_deadzone_n", 0.5)),
+-        supply_voltage=_as_scalar_or_vector(
+-            thruster.get("supply_voltage", 16.0),
+-            "thruster.supply_voltage",
+-        ),
+-        pwm_min_us=float(thruster.get("pwm_min_us", 1100.0)),
+-        pwm_max_us=float(thruster.get("pwm_max_us", 1900.0)),
+-        pwm_neutral_us=float(thruster.get("pwm_neutral_us", 1500.0)),
+-        force_to_pwm_coeffs_forward=(
+-            float(force_to_pwm_fwd[0]),
+-            float(force_to_pwm_fwd[1]),
+-            float(force_to_pwm_fwd[2]),
+-            float(force_to_pwm_fwd[3]),
+-            float(force_to_pwm_fwd[4]),
+-            float(force_to_pwm_fwd[5]),
+-        ),
+-        force_to_pwm_coeffs_reverse=(
+-            float(force_to_pwm_rev[0]),
+-            float(force_to_pwm_rev[1]),
+-            float(force_to_pwm_rev[2]),
+-            float(force_to_pwm_rev[3]),
+-            float(force_to_pwm_rev[4]),
+-            float(force_to_pwm_rev[5]),
+-        ),
+-        newton_per_kgf=float(thruster.get("newton_per_kgf", 9.81)),
++    model_name = thruster_model_name()
++    if model_name == "t200":
++        return default_t200_thruster_config(allocation_matrix_6xn)
++    raise ValueError(
++        f"Unsupported Taluy thruster.model '{model_name}' in {_YAML_PATH}."
+     )
+ 
+ 
+diff --git a/src/auvrl/mujoco/vehicle_configs/taluy_hydro.yaml b/src/auvrl/mujoco/vehicle_configs/taluy_hydro.yaml
+index aeffcc0..0cda35a 100644
+--- a/src/auvrl/mujoco/vehicle_configs/taluy_hydro.yaml
++++ b/src/auvrl/mujoco/vehicle_configs/taluy_hydro.yaml
+@@ -39,6 +39,8 @@ hydro:
+ 
+ thruster:
+   # Taluy uses the T200 underwater convention: positive thrust is site local -Z.
++  # Shared T200 actuator/model settings live in ../actuator_configs/t200.yaml.
++  model: t200
+   # Ordered to match controller thruster indexing (0..7).
+   site_names:
+     - thruster_0_site
+@@ -50,44 +52,6 @@ thruster:
+     - thruster_6_site
+     - thruster_7_site
+ 
+-  command_model: force_target
+-  command_limit: 60.0
+-  deadzone: 0.0
+-  time_constant_s: 0.05
+-
+-  force_deadzone_n: 0.5
+-  supply_voltage: 16.0
+-  pwm_min_us: 1100.0
+-  pwm_max_us: 1900.0
+-  pwm_neutral_us: 1500.0
+-  newton_per_kgf: 9.81
+-  # Fits from auv_control default (force [N] -> PWM [us], with voltage term).
+-  # forward (>0) aligns with coeffs_cw, reverse (<0) aligns with coeffs_ccw.
+-  force_to_pwm_coeffs_forward:
+-    - -7.65890867108129
+-    - -2.272619267631361
+-    - 1.5070809906898863
+-    - 140.79738360070297
+-    - -50.325593642656244
+-    - 1954.5975713257544
+-  force_to_pwm_coeffs_reverse:
+-    - 12.292935764557399
+-    - -3.0745135927968605
+-    - -1.0664649834600253
+-    - 181.68212348405177
+-    - 36.69456713973092
+-    - 1151.1307183400536
+-
+-  pwm_deadzone: 0.08
+-  pwm_to_omega_forward: [-139.0, 500.0, 8.28]
+-  pwm_to_omega_reverse: [161.0, 517.86, -5.72]
+-  rotor_constant: 0.001
+-
+-  linear_gain_forward: 1.0
+-  linear_gain_reverse: 1.0
+-  quadratic_gain_forward: 0.0
+-  quadratic_gain_reverse: 0.0
+-
+   # Controller output index -> hardware channel index.
+   channel_mapping: [4, 0, 2, 6, 7, 3, 1, 5]
+ 

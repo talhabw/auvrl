@@ -1,0 +1,61 @@
+--- git commit ---
+124c57799c40589737ff71eacf7aa91b148de5e3
+
+
+--- git status ---
+On branch vel_track
+Your branch is up to date with 'github/vel_track'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   src/auvrl/mjlab/__init__.py
+	modified:   src/auvrl/mjlab/tasks/velocity/__init__.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	examples/mjlab_taluy_velocity_train.py
+	logs/rsl_rl/taluy_velocity_6d/
+	src/auvrl/mjlab/tasks/velocity/rl_cfg.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/src/auvrl/mjlab/__init__.py b/src/auvrl/mjlab/__init__.py
+index 3402a3a..e842f30 100644
+--- a/src/auvrl/mjlab/__init__.py
++++ b/src/auvrl/mjlab/__init__.py
+@@ -4,6 +4,7 @@ from .body_wrench_action import BodyWrenchAction, BodyWrenchActionCfg
+ from .tasks.velocity import (
+     UniformBodyVelocityCommand,
+     UniformBodyVelocityCommandCfg,
++    taluy_velocity_ppo_runner_cfg,
+     make_taluy_velocity_env_cfg,
+ )
+ from .t200_thruster_actuator import T200ThrusterActuator, T200ThrusterActuatorCfg
+@@ -19,6 +20,7 @@ __all__ = [
+     "BodyWrenchActionCfg",
+     "UniformBodyVelocityCommand",
+     "UniformBodyVelocityCommandCfg",
++    "taluy_velocity_ppo_runner_cfg",
+     "T200ThrusterActuator",
+     "T200ThrusterActuatorCfg",
+     "UnderwaterHydroAction",
+diff --git a/src/auvrl/mjlab/tasks/velocity/__init__.py b/src/auvrl/mjlab/tasks/velocity/__init__.py
+index 24d263d..8b499b6 100644
+--- a/src/auvrl/mjlab/tasks/velocity/__init__.py
++++ b/src/auvrl/mjlab/tasks/velocity/__init__.py
+@@ -1,10 +1,12 @@
+ """Velocity-task scaffolding for Taluy body-wrench control."""
+ 
+ from .mdp import UniformBodyVelocityCommand, UniformBodyVelocityCommandCfg
++from .rl_cfg import taluy_velocity_ppo_runner_cfg
+ from .velocity_env_cfg import make_taluy_velocity_env_cfg
+ 
+ __all__ = [
+     "UniformBodyVelocityCommand",
+     "UniformBodyVelocityCommandCfg",
++    "taluy_velocity_ppo_runner_cfg",
+     "make_taluy_velocity_env_cfg",
+ ]

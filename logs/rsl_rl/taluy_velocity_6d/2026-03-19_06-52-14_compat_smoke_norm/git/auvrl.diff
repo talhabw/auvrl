@@ -1,0 +1,583 @@
+--- git commit ---
+acd40a82f4ca223594456ce3da932a658fc7b021
+
+
+--- git status ---
+On branch vel_track
+Your branch is up to date with 'github/vel_track'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   examples/mjlab_taluy_velocity_diagnose.py
+	modified:   examples/mjlab_taluy_velocity_env_smoke.py
+	modified:   examples/mjlab_taluy_velocity_play.py
+	modified:   examples/mjlab_taluy_velocity_viewer_demo.py
+	modified:   src/auvrl/mjlab/auv_env_cfg.py
+	modified:   src/auvrl/mjlab/body_wrench_action.py
+	modified:   src/auvrl/mjlab/t200_thruster_actuator.py
+	modified:   src/auvrl/mjlab/tasks/velocity/mdp/__init__.py
+	modified:   src/auvrl/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   src/auvrl/mjlab/tasks/velocity/rl_cfg.py
+	modified:   src/auvrl/mjlab/tasks/velocity/velocity_env_cfg.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/rsl_rl/taluy_velocity_6d/2026-03-19_06-52-14_compat_smoke_norm/
+	src/auvrl/mjlab/tasks/velocity/mdp/observations.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/examples/mjlab_taluy_velocity_diagnose.py b/examples/mjlab_taluy_velocity_diagnose.py
+index 3e88194..63e392c 100644
+--- a/examples/mjlab_taluy_velocity_diagnose.py
++++ b/examples/mjlab_taluy_velocity_diagnose.py
+@@ -8,7 +8,6 @@ TensorBoard scalar summary for the same run.
+ from __future__ import annotations
+ 
+ import argparse
+-from collections.abc import Callable
+ from dataclasses import asdict
+ import os
+ from pathlib import Path
+@@ -256,6 +255,7 @@ def _run_fixed_command_sweep(
+ 
+         mean_lin_sum = torch.zeros((len(CASES), 3), device=base_env.device)
+         mean_ang_sum = torch.zeros((len(CASES), 3), device=base_env.device)
++        mean_policy_action_sum = torch.zeros((len(CASES), 6), device=base_env.device)
+         mean_policy_wrench_sum = torch.zeros((len(CASES), 6), device=base_env.device)
+         mean_applied_wrench_sum = torch.zeros((len(CASES), 6), device=base_env.device)
+         lin_err_sq_sum = torch.zeros(len(CASES), device=base_env.device)
+@@ -273,9 +273,11 @@ def _run_fixed_command_sweep(
+ 
+             lin_vel = robot.data.root_link_lin_vel_b
+             ang_vel = robot.data.root_link_ang_vel_b
++            policy_wrench = wrench_term.action_to_wrench(action)
+             mean_lin_sum += lin_vel
+             mean_ang_sum += ang_vel
+-            mean_policy_wrench_sum += action
++            mean_policy_action_sum += action
++            mean_policy_wrench_sum += policy_wrench
+             mean_applied_wrench_sum += wrench_term.desired_wrench_b
+             lin_err_sq_sum += torch.sum(torch.square(command[:, :3] - lin_vel), dim=1)
+             ang_err_sq_sum += torch.sum(torch.square(command[:, 3:] - ang_vel), dim=1)
+@@ -284,6 +286,7 @@ def _run_fixed_command_sweep(
+ 
+         mean_lin = mean_lin_sum / float(tail_steps)
+         mean_ang = mean_ang_sum / float(tail_steps)
++        mean_policy_action = mean_policy_action_sum / float(tail_steps)
+         mean_policy_wrench = mean_policy_wrench_sum / float(tail_steps)
+         mean_applied_wrench = mean_applied_wrench_sum / float(tail_steps)
+         rms_lin = torch.sqrt(lin_err_sq_sum / float(tail_steps))
+@@ -300,6 +303,7 @@ def _run_fixed_command_sweep(
+             print(f"  cmd={_format_vec(command[index])}")
+             print(f"  mean_lin={_format_vec(mean_lin[index])}")
+             print(f"  mean_ang={_format_vec(mean_ang[index])}")
++            print(f"  mean_policy_action={_format_vec(mean_policy_action[index])}")
+             print(f"  mean_policy_wrench={_format_vec(mean_policy_wrench[index])}")
+             print(f"  mean_applied_wrench={_format_vec(mean_applied_wrench[index])}")
+             print(
+diff --git a/examples/mjlab_taluy_velocity_env_smoke.py b/examples/mjlab_taluy_velocity_env_smoke.py
+index 7367f68..079772d 100644
+--- a/examples/mjlab_taluy_velocity_env_smoke.py
++++ b/examples/mjlab_taluy_velocity_env_smoke.py
+@@ -35,7 +35,8 @@ from auvrl.mjlab import (  # noqa: E402  # type: ignore[import-not-found]
+ 
+ 
+ EXPECTED_COMMAND = torch.tensor([0.25, -0.15, 0.10, 0.30, -0.20, 0.45])
+-EXPECTED_OBS_DIM = 21
++EXPECTED_ACTOR_OBS_DIM = 29
++EXPECTED_CRITIC_OBS_DIM = 34
+ EXPECTED_REWARD_TERMS = {
+     "track_linear_velocity",
+     "track_angular_velocity",
+@@ -85,11 +86,11 @@ def _check_command_and_observations(env: ManagerBasedRlEnv) -> None:
+         critic_obs, torch.Tensor
+     ):
+         raise AssertionError("Actor/critic observations should be tensors.")
+-    if actor_obs.shape != (env.num_envs, EXPECTED_OBS_DIM):
++    if actor_obs.shape != (env.num_envs, EXPECTED_ACTOR_OBS_DIM):
+         raise AssertionError(
+             f"Actor observation has unexpected shape. Observed {tuple(actor_obs.shape)}"
+         )
+-    if critic_obs.shape != (env.num_envs, EXPECTED_OBS_DIM):
++    if critic_obs.shape != (env.num_envs, EXPECTED_CRITIC_OBS_DIM):
+         raise AssertionError(
+             "Critic observation has unexpected shape. "
+             f"Observed {tuple(critic_obs.shape)}"
+@@ -128,6 +129,29 @@ def _check_command_and_observations(env: ManagerBasedRlEnv) -> None:
+     if not torch.allclose(last_action_slice, torch.zeros_like(last_action_slice)):
+         raise AssertionError("Last-action slice should start at zero after reset.")
+ 
++    thruster_force_slice = actor_obs[:, 21:29]
++    if not torch.allclose(
++        thruster_force_slice,
++        torch.zeros_like(thruster_force_slice),
++    ):
++        raise AssertionError("Thruster-force slice should start at zero after reset.")
++
++    critic_depth = critic_obs[:, 29:30]
++    critic_current = critic_obs[:, 30:33]
++    critic_voltage = critic_obs[:, 33:34]
++    if not torch.allclose(critic_depth, torch.zeros_like(critic_depth)):
++        raise AssertionError(
++            "Critic depth-error term should start at zero after reset."
++        )
++    if not torch.allclose(critic_current, torch.zeros_like(critic_current)):
++        raise AssertionError(
++            "Critic current-velocity term should start at zero with no current."
++        )
++    if not torch.allclose(critic_voltage, torch.zeros_like(critic_voltage)):
++        raise AssertionError(
++            "Critic voltage-offset term should start at zero at nominal voltage."
++        )
++
+     if int(command_term.command_counter.min().item()) != 1:
+         raise AssertionError(
+             "Command term should have sampled once during reset. "
+diff --git a/examples/mjlab_taluy_velocity_play.py b/examples/mjlab_taluy_velocity_play.py
+index 8d8d314..f1db101 100644
+--- a/examples/mjlab_taluy_velocity_play.py
++++ b/examples/mjlab_taluy_velocity_play.py
+@@ -315,6 +315,7 @@ class InspectablePolicy:
+             assert command is not None
+             wrench_term = self._base_env.action_manager.get_term("body_wrench")
+             assert isinstance(wrench_term, BodyWrenchAction)
++            policy_wrench = wrench_term.action_to_wrench(actions)
+             lin_vel = robot.data.root_link_lin_vel_b[0].detach().cpu().tolist()
+             ang_vel = robot.data.root_link_ang_vel_b[0].detach().cpu().tolist()
+             desired_wrench = wrench_term.desired_wrench_b[0].detach().cpu().tolist()
+@@ -324,7 +325,8 @@ class InspectablePolicy:
+                 "[live] "
+                 f"command_b={command[0].detach().cpu().tolist()} "
+                 f"lin_vel_b={lin_vel} ang_vel_b={ang_vel} "
+-                f"policy_wrench_b={actions[0].detach().cpu().tolist()} "
++                f"policy_action={actions[0].detach().cpu().tolist()} "
++                f"policy_wrench_b={policy_wrench[0].detach().cpu().tolist()} "
+                 f"last_applied_wrench_b={desired_wrench} "
+                 f"last_thruster_max_n={max_thruster:.3f} "
+                 f"last_sat_frac={saturation_fraction:.3f}"
+diff --git a/examples/mjlab_taluy_velocity_viewer_demo.py b/examples/mjlab_taluy_velocity_viewer_demo.py
+index e5ee5c3..ebf8a4f 100644
+--- a/examples/mjlab_taluy_velocity_viewer_demo.py
++++ b/examples/mjlab_taluy_velocity_viewer_demo.py
+@@ -177,7 +177,8 @@ class SimpleBodyVelocityTrackingPolicy:
+             (lin_error * self._linear_gains, ang_error * self._angular_gains),
+             dim=1,
+         )
+-        return torch.clamp(wrench, min=-self._wrench_limits, max=self._wrench_limits)
++        wrench = torch.clamp(wrench, min=-self._wrench_limits, max=self._wrench_limits)
++        return wrench / self._wrench_limits
+ 
+ 
+ class InspectablePolicy:
+@@ -201,6 +202,7 @@ class InspectablePolicy:
+             assert command is not None
+             wrench_term = self._base_env.action_manager.get_term("body_wrench")
+             assert isinstance(wrench_term, BodyWrenchAction)
++            policy_wrench = wrench_term.action_to_wrench(actions)
+ 
+             lin_vel = robot.data.root_link_lin_vel_b[0].detach().cpu().tolist()
+             ang_vel = robot.data.root_link_ang_vel_b[0].detach().cpu().tolist()
+@@ -212,7 +214,8 @@ class InspectablePolicy:
+                 "[live] "
+                 f"command_b={command[0].detach().cpu().tolist()} "
+                 f"lin_vel_b={lin_vel} ang_vel_b={ang_vel} "
+-                f"policy_wrench_b={actions[0].detach().cpu().tolist()} "
++                f"policy_action={actions[0].detach().cpu().tolist()} "
++                f"policy_wrench_b={policy_wrench[0].detach().cpu().tolist()} "
+                 f"last_applied_wrench_b={desired_wrench} "
+                 f"last_thruster_max_n={max_thruster:.3f} "
+                 f"last_sat_frac={saturation_fraction:.3f}"
+diff --git a/src/auvrl/mjlab/auv_env_cfg.py b/src/auvrl/mjlab/auv_env_cfg.py
+index 5a65951..de07026 100644
+--- a/src/auvrl/mjlab/auv_env_cfg.py
++++ b/src/auvrl/mjlab/auv_env_cfg.py
+@@ -46,6 +46,7 @@ MINIMAL_AUV_MJCF = """
+ 
+ RandomizationMode = Literal["disabled", "startup", "reset"]
+ TaluyActionSpace = Literal["thruster", "body_wrench"]
++TaluyBodyWrenchActionMode = Literal["physical", "normalized"]
+ 
+ _AUVRL_ROOT = Path(__file__).resolve().parents[3]
+ _TALUY_XML_PATH = _AUVRL_ROOT / taluy_config.MODEL_XML_PATH
+@@ -71,6 +72,14 @@ def _validate_taluy_action_space(value: TaluyActionSpace) -> None:
+         )
+ 
+ 
++def _validate_body_wrench_action_mode(value: TaluyBodyWrenchActionMode) -> None:
++    if value not in {"physical", "normalized"}:
++        raise ValueError(
++            "body_wrench_action_mode must be 'physical' or 'normalized'. "
++            f"Got '{value}'."
++        )
++
++
+ def _coerce_supply_voltage(value: float | np.ndarray) -> float | tuple[float, ...]:
+     array = np.asarray(value, dtype=float)
+     if array.ndim == 0:
+@@ -242,6 +251,7 @@ def make_taluy_auv_env_cfg(
+     decimation: int = 4,
+     physics_dt_s: float = 0.002,
+     action_space: TaluyActionSpace = "thruster",
++    body_wrench_action_mode: TaluyBodyWrenchActionMode = "physical",
+     thruster_voltage_randomization_mode: RandomizationMode = "disabled",
+     thruster_voltage_range_v: tuple[float, float] = (14.0, 18.0),
+     current_randomization_mode: RandomizationMode = "disabled",
+@@ -261,6 +271,7 @@ def make_taluy_auv_env_cfg(
+     if physics_dt_s <= 0.0:
+         raise ValueError("physics_dt_s must be positive")
+     _validate_taluy_action_space(action_space)
++    _validate_body_wrench_action_mode(body_wrench_action_mode)
+     _validate_randomization_mode(
+         "thruster_voltage_randomization_mode", thruster_voltage_randomization_mode
+     )
+@@ -391,6 +402,7 @@ def make_taluy_auv_env_cfg(
+                 body_name=taluy_config.BODY_NAME,
+                 actuator_names=site_names,
+                 preserve_order=True,
++                action_mode=body_wrench_action_mode,
+                 local_force_axis=(
+                     float(force_axis[0]),
+                     float(force_axis[1]),
+diff --git a/src/auvrl/mjlab/body_wrench_action.py b/src/auvrl/mjlab/body_wrench_action.py
+index 867c29e..2797c72 100644
+--- a/src/auvrl/mjlab/body_wrench_action.py
++++ b/src/auvrl/mjlab/body_wrench_action.py
+@@ -3,7 +3,7 @@
+ from __future__ import annotations
+ 
+ from dataclasses import dataclass
+-from typing import TYPE_CHECKING
++from typing import TYPE_CHECKING, Literal
+ 
+ import torch
+ 
+@@ -31,6 +31,7 @@ class BodyWrenchActionCfg(ActionTermCfg):
+     actuator_names: tuple[str, ...]
+     local_force_axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
+     preserve_order: bool = False
++    action_mode: Literal["physical", "normalized"] = "physical"
+     neutralize_com_coupling: bool = True
+     require_full_rank: bool = True
+     wrench_limit: tuple[float, float, float, float, float, float] | None = None
+@@ -44,11 +45,20 @@ class BodyWrenchActionCfg(ActionTermCfg):
+         axis_norm = sum(float(value) * float(value) for value in self.local_force_axis)
+         if axis_norm <= 0.0:
+             raise ValueError("local_force_axis must be non-zero.")
++        if self.action_mode not in {"physical", "normalized"}:
++            raise ValueError(
++                "action_mode must be 'physical' or 'normalized', got "
++                f"'{self.action_mode}'."
++            )
+         if self.wrench_limit is not None:
+             if len(self.wrench_limit) != 6:
+                 raise ValueError("wrench_limit must contain exactly 6 values.")
+             if any(float(value) <= 0.0 for value in self.wrench_limit):
+                 raise ValueError("wrench_limit values must all be positive.")
++        if self.action_mode == "normalized" and self.wrench_limit is None:
++            raise ValueError(
++                "wrench_limit must be provided when action_mode='normalized'."
++            )
+         if (
+             self.site_force_limit_n is not None
+             and float(self.site_force_limit_n) <= 0.0
+@@ -145,6 +155,10 @@ class BodyWrenchAction(ActionTerm):
+     def raw_action(self) -> torch.Tensor:
+         return self._raw_actions
+ 
++    @property
++    def action_mode(self) -> str:
++        return self.cfg.action_mode
++
+     @property
+     def desired_wrench_b(self) -> torch.Tensor:
+         """Return clipped body-frame wrench command before COM shift."""
+@@ -170,16 +184,15 @@ class BodyWrenchAction(ActionTerm):
+         """Return the body-origin 6xN thrust allocation matrix."""
+         return self._allocation_matrix_b
+ 
++    @property
++    def wrench_limit(self) -> torch.Tensor | None:
++        """Return body-wrench limits used by this action term, if configured."""
++        return self._wrench_limit
++
+     def process_actions(self, actions: torch.Tensor) -> None:
+-        self._raw_actions[:] = actions
+-        if self._wrench_limit is None:
+-            self._desired_wrench_b[:] = actions
+-            return
+-        self._desired_wrench_b[:] = torch.clamp(
+-            actions,
+-            min=-self._wrench_limit,
+-            max=self._wrench_limit,
+-        )
++        effective_action = self._clip_policy_action(actions)
++        self._raw_actions[:] = effective_action
++        self._desired_wrench_b[:] = self.action_to_wrench(effective_action)
+ 
+     def apply_actions(self) -> None:
+         applied_wrench_b = self._desired_wrench_b
+@@ -204,6 +217,14 @@ class BodyWrenchAction(ActionTerm):
+             site_ids=self._site_ids,
+         )
+ 
++    def action_to_wrench(self, actions: torch.Tensor) -> torch.Tensor:
++        """Convert policy-space actions to clipped body-frame wrench commands."""
++        effective_action = self._clip_policy_action(actions)
++        if self.cfg.action_mode == "normalized":
++            assert self._wrench_limit is not None
++            return effective_action * self._wrench_limit
++        return effective_action
++
+     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+         if env_ids is None:
+             env_ids = slice(None)
+@@ -231,6 +252,13 @@ class BodyWrenchAction(ActionTerm):
+         torque_origin_b = torque_com_b + torch.cross(com_offset_b, force_b, dim=1)
+         return torch.cat((force_b, torque_origin_b), dim=1)
+ 
++    def _clip_policy_action(self, actions: torch.Tensor) -> torch.Tensor:
++        if self.cfg.action_mode == "normalized":
++            return actions.clamp(min=-1.0, max=1.0)
++        if self._wrench_limit is None:
++            return actions
++        return torch.clamp(actions, min=-self._wrench_limit, max=self._wrench_limit)
++
+     def _num_selected_envs(self, env_ids: torch.Tensor | slice | None) -> int:
+         if env_ids is None:
+             return self.num_envs
+diff --git a/src/auvrl/mjlab/t200_thruster_actuator.py b/src/auvrl/mjlab/t200_thruster_actuator.py
+index 7b06231..9e99ca7 100644
+--- a/src/auvrl/mjlab/t200_thruster_actuator.py
++++ b/src/auvrl/mjlab/t200_thruster_actuator.py
+@@ -195,6 +195,13 @@ class T200ThrusterActuator(Actuator[T200ThrusterActuatorCfg]):
+             raise RuntimeError("Actuator must be initialized before reading voltage.")
+         return self._supply_voltage
+ 
++    @property
++    def thrust_state(self) -> torch.Tensor:
++        """Return per-env/per-thruster thrust after lag and saturation."""
++        if self._thrust_state is None:
++            raise RuntimeError("Actuator must be initialized before reading thrust.")
++        return self._thrust_state
++
+     def compute(self, cmd: ActuatorCmd) -> torch.Tensor:
+         thrust_target = self._target_thrust_from_command(cmd.effort_target)
+ 
+diff --git a/src/auvrl/mjlab/tasks/velocity/mdp/__init__.py b/src/auvrl/mjlab/tasks/velocity/mdp/__init__.py
+index 3ebcbe6..d9bba6a 100644
+--- a/src/auvrl/mjlab/tasks/velocity/mdp/__init__.py
++++ b/src/auvrl/mjlab/tasks/velocity/mdp/__init__.py
+@@ -1,4 +1,5 @@
+ from mjlab.envs.mdp import *  # noqa: F401, F403
+ 
++from .observations import *  # noqa: F401, F403
+ from .rewards import *  # noqa: F401, F403
+ from .velocity_command import *  # noqa: F401, F403
+diff --git a/src/auvrl/mjlab/tasks/velocity/mdp/rewards.py b/src/auvrl/mjlab/tasks/velocity/mdp/rewards.py
+index 1054bed..3cca241 100644
+--- a/src/auvrl/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/auvrl/mjlab/tasks/velocity/mdp/rewards.py
+@@ -50,18 +50,27 @@ def track_body_angular_velocity(
+ def normalized_body_wrench_action_l2(
+     env: ManagerBasedRlEnv,
+     action_name: str,
+-    wrench_limits: tuple[float, float, float, float, float, float],
++    wrench_limits: tuple[float, float, float, float, float, float] | None = None,
+ ) -> torch.Tensor:
+     """Penalize commanded body wrench after normalizing by axis limits."""
+     action_term = env.action_manager.get_term(action_name)
+     if not isinstance(action_term, BodyWrenchAction):
+         raise ValueError(f"Action term '{action_name}' is not BodyWrenchAction.")
+ 
+-    limits = torch.tensor(wrench_limits, dtype=torch.float, device=env.device).view(
+-        1, 6
+-    )
+-    if torch.any(limits <= 0.0):
+-        raise ValueError("wrench_limits must all be positive.")
++    if action_term.action_mode == "normalized":
++        return torch.mean(torch.square(action_term.raw_action), dim=1)
++
++    if wrench_limits is None:
++        limit = action_term.wrench_limit
++        if limit is None:
++            return torch.mean(torch.square(action_term.raw_action), dim=1)
++        limits = limit
++    else:
++        limits = torch.tensor(wrench_limits, dtype=torch.float, device=env.device).view(
++            1, 6
++        )
++        if torch.any(limits <= 0.0):
++            raise ValueError("wrench_limits must all be positive.")
+ 
+     normalized_action = action_term.desired_wrench_b / limits
+     return torch.mean(torch.square(normalized_action), dim=1)
+@@ -69,14 +78,30 @@ def normalized_body_wrench_action_l2(
+ 
+ def normalized_body_wrench_action_rate_l2(
+     env: ManagerBasedRlEnv,
+-    wrench_limits: tuple[float, float, float, float, float, float],
++    wrench_limits: tuple[float, float, float, float, float, float] | None = None,
++    action_name: str = "body_wrench",
+ ) -> torch.Tensor:
+     """Penalize normalized rate-of-change in body-wrench policy outputs."""
+-    limits = torch.tensor(wrench_limits, dtype=torch.float, device=env.device).view(
+-        1, 6
+-    )
+-    if torch.any(limits <= 0.0):
+-        raise ValueError("wrench_limits must all be positive.")
++    action_term = env.action_manager.get_term(action_name)
++    if not isinstance(action_term, BodyWrenchAction):
++        raise ValueError(f"Action term '{action_name}' is not BodyWrenchAction.")
++
++    if action_term.action_mode == "normalized":
++        delta = env.action_manager.action - env.action_manager.prev_action
++        return torch.mean(torch.square(delta), dim=1)
++
++    if wrench_limits is None:
++        limit = action_term.wrench_limit
++        if limit is None:
++            delta = env.action_manager.action - env.action_manager.prev_action
++            return torch.mean(torch.square(delta), dim=1)
++        limits = limit
++    else:
++        limits = torch.tensor(wrench_limits, dtype=torch.float, device=env.device).view(
++            1, 6
++        )
++        if torch.any(limits <= 0.0):
++            raise ValueError("wrench_limits must all be positive.")
+ 
+     delta = (env.action_manager.action - env.action_manager.prev_action) / limits
+     return torch.mean(torch.square(delta), dim=1)
+diff --git a/src/auvrl/mjlab/tasks/velocity/rl_cfg.py b/src/auvrl/mjlab/tasks/velocity/rl_cfg.py
+index f01a46a..31ccd3c 100644
+--- a/src/auvrl/mjlab/tasks/velocity/rl_cfg.py
++++ b/src/auvrl/mjlab/tasks/velocity/rl_cfg.py
+@@ -25,7 +25,7 @@ def taluy_velocity_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+             value_loss_coef=1.0,
+             use_clipped_value_loss=True,
+             clip_param=0.2,
+-            entropy_coef=0.0,
++            entropy_coef=0.01,
+             num_learning_epochs=5,
+             num_mini_batches=4,
+             learning_rate=1.0e-3,
+@@ -37,8 +37,9 @@ def taluy_velocity_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+         ),
+         experiment_name="taluy_velocity_6d",
+         save_interval=50,
++        clip_actions=1.0,
+         num_steps_per_env=32,
+-        max_iterations=5000,
++        max_iterations=30_000,
+         logger="tensorboard",
+         wandb_project="auvrl",
+         upload_model=False,
+diff --git a/src/auvrl/mjlab/tasks/velocity/velocity_env_cfg.py b/src/auvrl/mjlab/tasks/velocity/velocity_env_cfg.py
+index 9bc4603..a92059a 100644
+--- a/src/auvrl/mjlab/tasks/velocity/velocity_env_cfg.py
++++ b/src/auvrl/mjlab/tasks/velocity/velocity_env_cfg.py
+@@ -47,12 +47,7 @@ def make_taluy_velocity_env_cfg(
+     ),
+     vertical_current_range_m_s: tuple[float, float] = (-0.1, 0.1),
+ ) -> ManagerBasedRlEnvCfg:
+-    """Create the first Taluy velocity-task scaffold.
+-
+-    This step adds command generation, observations, and viewer/debug integration,
+-    while keeping rewards intentionally empty until the command/observation surface
+-    is verified.
+-    """
++    """Create the Taluy 6D velocity task with normalized body-wrench actions."""
+ 
+     if episode_length_s <= 0.0:
+         raise ValueError("episode_length_s must be positive.")
+@@ -70,6 +65,7 @@ def make_taluy_velocity_env_cfg(
+         decimation=decimation,
+         physics_dt_s=physics_dt_s,
+         action_space="body_wrench",
++        body_wrench_action_mode="normalized",
+         thruster_voltage_randomization_mode=thruster_voltage_randomization_mode,
+         thruster_voltage_range_v=thruster_voltage_range_v,
+         current_randomization_mode=current_randomization_mode,
+@@ -120,17 +116,6 @@ def make_taluy_velocity_env_cfg(
+         ),
+     )
+     command_obs_scale = lin_obs_scale + ang_obs_scale
+-    wrench_limit_values = taluy_config.demo_wrench_limit()
+-    wrench_limits = (
+-        float(wrench_limit_values[0]),
+-        float(wrench_limit_values[1]),
+-        float(wrench_limit_values[2]),
+-        float(wrench_limit_values[3]),
+-        float(wrench_limit_values[4]),
+-        float(wrench_limit_values[5]),
+-    )
+-    action_obs_scale = tuple(1.0 / max(limit, 1.0e-6) for limit in wrench_limits)
+-
+     cfg.commands = {
+         "body_velocity": mdp.UniformBodyVelocityCommandCfg(
+             entity_name="robot",
+@@ -149,7 +134,7 @@ def make_taluy_velocity_env_cfg(
+         )
+     }
+ 
+-    obs_terms = {
++    actor_terms = {
+         "base_lin_vel": ObservationTermCfg(
+             func=envs_mdp.base_lin_vel,
+             scale=lin_obs_scale,
+@@ -167,17 +152,28 @@ def make_taluy_velocity_env_cfg(
+         "last_action": ObservationTermCfg(
+             func=envs_mdp.last_action,
+             params={"action_name": "body_wrench"},
+-            scale=action_obs_scale,
++        ),
++        "thruster_force_state": ObservationTermCfg(func=mdp.thruster_force_state),
++    }
++    critic_terms = {
++        **actor_terms,
++        "depth_error": ObservationTermCfg(func=mdp.depth_error, scale=0.5),
++        "current_velocity_b": ObservationTermCfg(
++            func=mdp.current_velocity_b,
++            scale=lin_obs_scale,
++        ),
++        "thruster_voltage_offset": ObservationTermCfg(
++            func=mdp.thruster_voltage_offset,
+         ),
+     }
+     cfg.observations = {
+         "actor": ObservationGroupCfg(
+-            terms=obs_terms,
++            terms=actor_terms,
+             concatenate_terms=True,
+             enable_corruption=False,
+         ),
+         "critic": ObservationGroupCfg(
+-            terms=dict(obs_terms),
++            terms=critic_terms,
+             concatenate_terms=True,
+             enable_corruption=False,
+         ),
+@@ -207,17 +203,12 @@ def make_taluy_velocity_env_cfg(
+         "action_l2": RewardTermCfg(
+             func=mdp.normalized_body_wrench_action_l2,
+             weight=action_l2_weight,
+-            params={
+-                "action_name": "body_wrench",
+-                "wrench_limits": wrench_limits,
+-            },
++            params={"action_name": "body_wrench"},
+         ),
+         "action_rate_l2": RewardTermCfg(
+             func=mdp.normalized_body_wrench_action_rate_l2,
+             weight=action_rate_l2_weight,
+-            params={
+-                "wrench_limits": wrench_limits,
+-            },
++            params={"action_name": "body_wrench"},
+         ),
+         "saturation": RewardTermCfg(
+             func=mdp.body_wrench_saturation_penalty,
