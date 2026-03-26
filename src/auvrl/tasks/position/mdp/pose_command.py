@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import mujoco
 import numpy as np
 import torch
 
@@ -70,6 +72,7 @@ class UniformPoseCommand(CommandTerm):
         self._joystick_enabled: viser.GuiCheckboxHandle | None = None
         self._joystick_sliders: list[viser.GuiSliderHandle] = []
         self._joystick_get_env_idx: Callable[[], int] | None = None
+        self._ghost_model: mujoco.MjModel | None = None
 
     @property
     def command(self) -> torch.Tensor:
@@ -315,13 +318,18 @@ class UniformPoseCommand(CommandTerm):
             if np.linalg.norm(base_pos_w) < 1e-6:
                 continue
 
+            if self._ghost_model is None:
+                self._ghost_model = copy.deepcopy(self._env.sim.mj_model)
+                self._ghost_model.geom_contype[:] = 0
+                self._ghost_model.geom_conaffinity[:] = 0
+
             # Ghost mesh at desired pose
             qpos = self.robot.data.data.qpos[env_idx].detach().cpu().numpy().copy()
             qpos[:3] = desired_pos
             qpos[3:7] = command[3:7]
             visualizer.add_ghost_mesh(
                 qpos=qpos,
-                model=self._env.sim.mj_model,
+                model=self._ghost_model,
                 alpha=viz.ghost_alpha,
             )
 
