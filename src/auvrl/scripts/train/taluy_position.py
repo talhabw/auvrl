@@ -105,6 +105,11 @@ def _parse_args() -> argparse.Namespace:
         help="Episode horizon in seconds.",
     )
     parser.add_argument(
+        "--disable-curriculum",
+        action="store_true",
+        help="Disable the default command/reset curriculum.",
+    )
+    parser.add_argument(
         "--thruster-voltage-event-mode",
         "--thruster-voltage-randomization-mode",
         dest="thruster_voltage_event_mode",
@@ -165,6 +170,7 @@ def main() -> None:
     env_cfg = make_taluy_position_env_cfg(
         num_envs=num_envs,
         episode_length_s=args.episode_length_s,
+        curriculum_enabled=not args.disable_curriculum,
         thruster_voltage_event_mode=args.thruster_voltage_event_mode,
         current_event_mode=args.current_event_mode,
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
 
@@ -32,6 +33,39 @@ def _current_obs_scale(
     )
 
 
+def _default_position_curriculum_stages() -> list[mdp.PositionCurriculumStage]:
+    return [
+        {
+            "step": 0,
+            "command_position_scale": 0.40,
+            "command_orientation_scale": 0.35,
+            "reset_pose_scale": 0.35,
+            "reset_velocity_scale": 0.35,
+        },
+        {
+            "step": 4_000,
+            "command_position_scale": 0.60,
+            "command_orientation_scale": 0.55,
+            "reset_pose_scale": 0.55,
+            "reset_velocity_scale": 0.55,
+        },
+        {
+            "step": 8_000,
+            "command_position_scale": 0.80,
+            "command_orientation_scale": 0.75,
+            "reset_pose_scale": 0.75,
+            "reset_velocity_scale": 0.75,
+        },
+        {
+            "step": 12_000,
+            "command_position_scale": 1.00,
+            "command_orientation_scale": 1.00,
+            "reset_pose_scale": 1.00,
+            "reset_velocity_scale": 1.00,
+        },
+    ]
+
+
 def make_taluy_position_env_cfg(
     *,
     num_envs: int = 1,
@@ -55,6 +89,8 @@ def make_taluy_position_env_cfg(
     reset_ang_vel_x_range_rad_s: tuple[float, float] = (-0.20, 0.20),
     reset_ang_vel_y_range_rad_s: tuple[float, float] = (-0.20, 0.20),
     reset_ang_vel_z_range_rad_s: tuple[float, float] = (-0.20, 0.20),
+    curriculum_enabled: bool = True,
+    curriculum_stages: list[mdp.PositionCurriculumStage] | None = None,
     thruster_voltage_event_mode: EventMode = "disabled",
     thruster_voltage_range_v: tuple[float, float] = (16.0, 16.0),
     current_event_mode: EventMode = "disabled",
@@ -97,6 +133,39 @@ def make_taluy_position_env_cfg(
 
     cfg.scene.num_envs = num_envs
     cfg.episode_length_s = episode_length_s
+
+    if curriculum_enabled:
+        if curriculum_stages is None:
+            curriculum_stages = _default_position_curriculum_stages()
+        if len(curriculum_stages) == 0:
+            raise ValueError("curriculum_stages must not be empty when enabled.")
+        pose_command_cfg = cfg.commands["pose"]
+        pose_command_cfg.base_ranges = mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=tuple(pose_command_cfg.ranges.pos_x),
+            pos_y=tuple(pose_command_cfg.ranges.pos_y),
+            pos_z=tuple(pose_command_cfg.ranges.pos_z),
+            roll=tuple(pose_command_cfg.ranges.roll),
+            pitch=tuple(pose_command_cfg.ranges.pitch),
+            yaw=tuple(pose_command_cfg.ranges.yaw),
+        )
+        reset_cfg = cfg.events["reset_root_state_uniform"]
+        reset_cfg.base_pose_range = {
+            key: tuple(value) for key, value in reset_cfg.params["pose_range"].items()
+        }
+        reset_cfg.base_velocity_range = {
+            key: tuple(value)
+            for key, value in reset_cfg.params["velocity_range"].items()
+        }
+        cfg.curriculum = {
+            "command_and_reset_pose_ranges": CurriculumTermCfg(
+                func=mdp.command_and_reset_pose_ranges,
+                params={
+                    "command_name": "pose",
+                    "reset_event_name": "reset_root_state_uniform",
+                    "stages": curriculum_stages,
+                },
+            )
+        }
 
     if current_event_mode != "disabled":
         cfg.observations["critic"].terms["current_velocity_b"] = ObservationTermCfg(

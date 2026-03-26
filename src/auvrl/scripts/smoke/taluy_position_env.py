@@ -73,6 +73,7 @@ def _make_env() -> ManagerBasedRlEnv:
         command_roll_range_rad=(0.0, 0.0),
         command_pitch_range_rad=(0.0, 0.0),
         command_yaw_range_rad=(0.35, 0.35),
+        curriculum_enabled=False,
         reset_pos_x_range_m=(0.0, 0.0),
         reset_pos_y_range_m=(0.0, 0.0),
         reset_pos_z_range_m=(0.0, 0.0),
