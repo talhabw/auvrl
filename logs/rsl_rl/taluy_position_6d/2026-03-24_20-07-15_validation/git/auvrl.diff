@@ -1,0 +1,183 @@
+--- git commit ---
+dd1b7379015a1cfb4e4d6cfcd762fd5b16e0343a
+
+
+--- git status ---
+On branch position
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   README.md
+	modified:   STATUS.md
+	modified:   src/auvrl/__init__.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	POSITION_TRACKING_TASK_PLAN.md
+	logs/rsl_rl/taluy_position_6d/
+	src/auvrl/scripts/smoke/taluy_position_env.py
+	src/auvrl/scripts/train/taluy_position.py
+	src/auvrl/tasks/position/
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/README.md b/README.md
+index 40603f1..2eb15ea 100644
+--- a/README.md
++++ b/README.md
+@@ -17,9 +17,13 @@ smoke testing, demos, diagnostics, and training.
+ ## Main entry points
+ 
+ - Taluy vehicle base env builder: `src/auvrl/envs/taluy_env_cfg.py`
++- Vehicle-invariant position task base: `src/auvrl/tasks/position/position_env_cfg.py`
++- Taluy position final env builder: `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
++- Taluy position PPO config: `src/auvrl/tasks/position/config/taluy/rl_cfg.py`
+ - Vehicle-invariant velocity task base: `src/auvrl/tasks/velocity/velocity_env_cfg.py`
+ - Taluy velocity final env builder: `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
+ - Taluy velocity PPO config: `src/auvrl/tasks/velocity/config/taluy/rl_cfg.py`
++- Position training script: `src/auvrl/scripts/train/taluy_position.py`
+ - Training script: `src/auvrl/scripts/train/taluy_velocity.py`
+ - Visual demo: `src/auvrl/scripts/demo/taluy_visual.py`
+ 
+@@ -33,6 +37,8 @@ smoke testing, demos, diagnostics, and training.
+ Current example:
+ 
+ - `make_taluy_base_env_cfg()` in `src/auvrl/envs/taluy_env_cfg.py`
++- `make_position_env_cfg()` in `src/auvrl/tasks/position/position_env_cfg.py`
++- `make_taluy_position_env_cfg()` in `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
+ - `make_velocity_env_cfg()` in `src/auvrl/tasks/velocity/velocity_env_cfg.py`
+ - `make_taluy_velocity_env_cfg()` in `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
+ 
+@@ -52,12 +58,14 @@ uv run python -m auvrl.scripts.smoke.hydro_action
+ uv run python -m auvrl.scripts.smoke.env
+ uv run python -m auvrl.scripts.smoke.taluy_body_wrench
+ uv run python -m auvrl.scripts.smoke.taluy_dynamics_regression
++uv run python -m auvrl.scripts.smoke.taluy_position_env
+ uv run python -m auvrl.scripts.smoke.taluy_velocity_env
+ ```
+ 
+ Training:
+ 
+ ```bash
++uv run python -m auvrl.scripts.train.taluy_position
+ uv run python -m auvrl.scripts.train.taluy_velocity
+ ```
+ 
+diff --git a/STATUS.md b/STATUS.md
+index fc96b65..75c0857 100644
+--- a/STATUS.md
++++ b/STATUS.md
+@@ -8,6 +8,9 @@ This is the single internal state/status note for the repository.
+ - Taluy has both raw thruster control and 6D body-wrench control paths.
+ - The current RL focus is Taluy body-velocity tracking in a clean environment
+   before leaning heavily on domain randomization.
++- A Taluy body-wrench position-tracking scaffold now exists alongside velocity
++  tracking so waypoint and station-keeping experiments can start without waiting
++  on more velocity-task iteration.
+ 
+ ## Current config workflow
+ 
+@@ -50,6 +53,12 @@ This is the single internal state/status note for the repository.
+ - Vehicle-invariant velocity task base:
+   - `src/auvrl/tasks/velocity/velocity_env_cfg.py`
+   - `src/auvrl/tasks/velocity/mdp/`
++- Vehicle-invariant position task base:
++  - `src/auvrl/tasks/position/position_env_cfg.py`
++  - `src/auvrl/tasks/position/mdp/`
++- Taluy-specific position final config:
++  - `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
++  - `src/auvrl/tasks/position/config/taluy/rl_cfg.py`
+ - Taluy-specific velocity final config:
+   - `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
+   - `src/auvrl/tasks/velocity/config/taluy/rl_cfg.py`
+@@ -61,16 +70,29 @@ This is the single internal state/status note for the repository.
+   - vehicle base: `src/auvrl/envs/taluy_env_cfg.py`
+   - task base: `src/auvrl/tasks/velocity/velocity_env_cfg.py`
+   - task+vehicle final: `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
++- The same layering pattern now exists for Taluy position tracking:
++  - vehicle base: `src/auvrl/envs/taluy_env_cfg.py`
++  - task base: `src/auvrl/tasks/position/position_env_cfg.py`
++  - task+vehicle final: `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
+ - `make_velocity_env_cfg()` is the reusable task-level builder for 6-DOF body
+   velocity tracking. It sets up commands, core observations, and generic
+   velocity-tracking rewards, but leaves vehicle-specific tuning out.
++- `make_position_env_cfg()` is the reusable task-level builder for 6-DOF pose
++  tracking. It sets up pose commands, goal-relative observations, reset
++  randomization, and generic position/orientation rewards.
+ - `make_taluy_velocity_env_cfg()` is now the concrete Taluy velocity entrypoint.
+   It starts from `make_taluy_base_env_cfg()`, applies the velocity task base,
+   then adds Taluy-only observation/reward terms and run-specific overrides.
++- `make_taluy_position_env_cfg()` is the concrete Taluy position entrypoint.
++  It starts from `make_taluy_base_env_cfg()`, applies the position task base,
++  then adds Taluy-only observation/reward terms and run-specific overrides.
+ - PPO config for this task/vehicle pair now lives beside the final env builder
+   under `src/auvrl/tasks/velocity/config/taluy/rl_cfg.py`.
++- PPO config for Taluy position lives beside the final env builder under
++  `src/auvrl/tasks/position/config/taluy/rl_cfg.py`.
+ - Public imports still expose the Taluy final env creator through
+-  `src/auvrl/tasks/velocity/__init__.py` and `src/auvrl/__init__.py`.
++  `src/auvrl/tasks/velocity/__init__.py`, `src/auvrl/tasks/position/__init__.py`,
++  and `src/auvrl/__init__.py`.
+ 
+ ## Important behavioral notes
+ 
+@@ -89,20 +111,23 @@ This is the single internal state/status note for the repository.
+   - `uv run python -m compileall -q src/auvrl`
+ - Useful smoke tests:
+   - `uv run python -m auvrl.scripts.smoke.taluy_dynamics_regression`
++  - `uv run python -m auvrl.scripts.smoke.taluy_position_env`
+   - `uv run python -m auvrl.scripts.smoke.taluy_velocity_env`
+   - `uv run python -m auvrl.scripts.smoke.taluy_body_wrench`
+ 
+ Last known working direction:
+ 
+ - The layered vehicle base -> task base -> task+vehicle final config workflow
+-  is in place for Taluy velocity.
++  is in place for Taluy velocity and Taluy position.
+ - Taluy env/task wiring is in place.
+ - Taluy velocity training runs in MJLab.
++- Taluy position task scaffolding is now available for training/smoke checks.
+ - Clean-environment training is the current baseline path.
+ 
+ ## Immediate priorities
+ 
+-- Improve Taluy velocity-tracking quality in the clean environment.
++- Establish a clean-environment Taluy position-tracking baseline.
++- Continue improving Taluy velocity-tracking quality in the clean environment.
+ - Keep following the new layered config pattern when adding more tasks or more
+   vehicles.
+ - Use demos and smoke tests to catch regressions in hydro/action/allocation
+diff --git a/src/auvrl/__init__.py b/src/auvrl/__init__.py
+index 7ee566f..0200913 100644
+--- a/src/auvrl/__init__.py
++++ b/src/auvrl/__init__.py
+@@ -15,6 +15,12 @@ from .envs.events import (
+ )
+ from .sim.hydrodynamics import AUVBodyState, HydroConfig, HydrodynamicsModel
+ from .sim.underwater_hydro_action import UnderwaterHydroAction, UnderwaterHydroActionCfg
++from .tasks.position import (
++    UniformPoseCommand,
++    UniformPoseCommandCfg,
++    make_taluy_position_env_cfg,
++    taluy_position_ppo_runner_cfg,
++)
+ from .tasks.velocity import (
+     UniformBodyVelocityCommand,
+     UniformBodyVelocityCommandCfg,
+@@ -37,10 +43,14 @@ __all__ = [
+     "UnderwaterHydroActionCfg",
+     "UniformBodyVelocityCommand",
+     "UniformBodyVelocityCommandCfg",
++    "UniformPoseCommand",
++    "UniformPoseCommandCfg",
+     "make_taluy_base_env_cfg",
+     "make_taluy_auv_env_cfg",
++    "make_taluy_position_env_cfg",
+     "make_taluy_velocity_env_cfg",
+     "randomize_thruster_supply_voltage",
+     "randomize_water_current_velocity",
++    "taluy_position_ppo_runner_cfg",
+     "taluy_velocity_ppo_runner_cfg",
+ ]

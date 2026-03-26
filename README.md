@@ -17,9 +17,13 @@ smoke testing, demos, diagnostics, and training.
 ## Main entry points
 
 - Taluy vehicle base env builder: `src/auvrl/envs/taluy_env_cfg.py`
+- Vehicle-invariant position task base: `src/auvrl/tasks/position/position_env_cfg.py`
+- Taluy position final env builder: `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
+- Taluy position PPO config: `src/auvrl/tasks/position/config/taluy/rl_cfg.py`
 - Vehicle-invariant velocity task base: `src/auvrl/tasks/velocity/velocity_env_cfg.py`
 - Taluy velocity final env builder: `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
 - Taluy velocity PPO config: `src/auvrl/tasks/velocity/config/taluy/rl_cfg.py`
+- Position training script: `src/auvrl/scripts/train/taluy_position.py`
 - Training script: `src/auvrl/scripts/train/taluy_velocity.py`
 - Visual demo: `src/auvrl/scripts/demo/taluy_visual.py`
 
@@ -33,6 +37,8 @@ smoke testing, demos, diagnostics, and training.
 Current example:
 
 - `make_taluy_base_env_cfg()` in `src/auvrl/envs/taluy_env_cfg.py`
+- `make_position_env_cfg()` in `src/auvrl/tasks/position/position_env_cfg.py`
+- `make_taluy_position_env_cfg()` in `src/auvrl/tasks/position/config/taluy/env_cfgs.py`
 - `make_velocity_env_cfg()` in `src/auvrl/tasks/velocity/velocity_env_cfg.py`
 - `make_taluy_velocity_env_cfg()` in `src/auvrl/tasks/velocity/config/taluy/env_cfgs.py`
 
@@ -52,12 +58,14 @@ uv run python -m auvrl.scripts.smoke.hydro_action
 uv run python -m auvrl.scripts.smoke.env
 uv run python -m auvrl.scripts.smoke.taluy_body_wrench
 uv run python -m auvrl.scripts.smoke.taluy_dynamics_regression
+uv run python -m auvrl.scripts.smoke.taluy_position_env
 uv run python -m auvrl.scripts.smoke.taluy_velocity_env
 ```
 
 Training:
 
 ```bash
+uv run python -m auvrl.scripts.train.taluy_position
 uv run python -m auvrl.scripts.train.taluy_velocity
 ```
 

@@ -15,6 +15,12 @@ from .envs.events import (
 )
 from .sim.hydrodynamics import AUVBodyState, HydroConfig, HydrodynamicsModel
 from .sim.underwater_hydro_action import UnderwaterHydroAction, UnderwaterHydroActionCfg
+from .tasks.position import (
+    UniformPoseCommand,
+    UniformPoseCommandCfg,
+    make_taluy_position_env_cfg,
+    taluy_position_ppo_runner_cfg,
+)
 from .tasks.velocity import (
     UniformBodyVelocityCommand,
     UniformBodyVelocityCommandCfg,
@@ -37,10 +43,14 @@ __all__ = [
     "UnderwaterHydroActionCfg",
     "UniformBodyVelocityCommand",
     "UniformBodyVelocityCommandCfg",
+    "UniformPoseCommand",
+    "UniformPoseCommandCfg",
     "make_taluy_base_env_cfg",
     "make_taluy_auv_env_cfg",
+    "make_taluy_position_env_cfg",
     "make_taluy_velocity_env_cfg",
     "randomize_thruster_supply_voltage",
     "randomize_water_current_velocity",
+    "taluy_position_ppo_runner_cfg",
     "taluy_velocity_ppo_runner_cfg",
 ]
