@@ -28,8 +28,8 @@ from auvrl import (  # noqa: E402  # type: ignore[import-not-found]
 )
 
 
-EXPECTED_ACTOR_OBS_DIM = 21
-EXPECTED_CRITIC_OBS_DIM = 35
+EXPECTED_ACTOR_OBS_DIM = 27
+EXPECTED_CRITIC_OBS_DIM = 41
 EXPECTED_REWARD_TERMS = {
     "track_position",
     "track_orientation",
@@ -156,20 +156,23 @@ def _check_command_and_observations(env: ManagerBasedRlEnv) -> None:
     base_lin_vel = actor_obs[:, 6:9]
     base_ang_vel = actor_obs[:, 9:12]
     projected_gravity = actor_obs[:, 12:15]
-    applied_wrench = actor_obs[:, 15:21]
+    last_action = actor_obs[:, 15:21]
+    applied_wrench = actor_obs[:, 21:27]
     if not torch.allclose(base_lin_vel, torch.zeros_like(base_lin_vel)):
         raise AssertionError("Base linear velocity should start at zero after reset.")
     if not torch.allclose(base_ang_vel, torch.zeros_like(base_ang_vel)):
         raise AssertionError("Base angular velocity should start at zero after reset.")
+    if not torch.allclose(last_action, torch.zeros_like(last_action)):
+        raise AssertionError("Last action should start at zero after reset.")
     if not torch.allclose(applied_wrench, torch.zeros_like(applied_wrench)):
         raise AssertionError("Applied body wrench should start at zero after reset.")
     if not torch.isfinite(projected_gravity).all():
         raise AssertionError("Projected gravity should remain finite.")
 
-    critic_current_pos = critic_obs[:, 21:24]
-    critic_current_quat = critic_obs[:, 24:28]
-    critic_desired_pos = critic_obs[:, 28:31]
-    critic_desired_quat = critic_obs[:, 31:35]
+    critic_current_pos = critic_obs[:, 27:30]
+    critic_current_quat = critic_obs[:, 30:34]
+    critic_desired_pos = critic_obs[:, 34:37]
+    critic_desired_quat = critic_obs[:, 37:41]
     if not torch.allclose(critic_current_pos, current_pos_rel, atol=1.0e-5):
         raise AssertionError("Critic current-position slice is incorrect.")
     if not torch.allclose(

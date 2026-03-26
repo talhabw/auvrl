@@ -79,6 +79,10 @@ def make_position_env_cfg(
         "base_lin_vel": ObservationTermCfg(func=envs_mdp.base_lin_vel),
         "base_ang_vel": ObservationTermCfg(func=envs_mdp.base_ang_vel),
         "projected_gravity": ObservationTermCfg(func=envs_mdp.projected_gravity),
+        "last_action": ObservationTermCfg(
+            func=envs_mdp.last_action,
+            params={"action_name": "body_wrench"},
+        ),
         "applied_body_wrench": ObservationTermCfg(
             func=mdp.applied_body_wrench,
             params={"action_name": "body_wrench"},
