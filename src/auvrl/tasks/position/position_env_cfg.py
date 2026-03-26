@@ -53,7 +53,7 @@ def make_position_env_cfg(
         "pose": mdp.UniformPoseCommandCfg(
             entity_name="robot",
             resampling_time_range=command_resampling_time_s,
-            debug_vis=False,
+            debug_vis=True,
             ranges=mdp.UniformPoseCommandCfg.Ranges(
                 pos_x=command_pos_x_range_m,
                 pos_y=command_pos_y_range_m,
