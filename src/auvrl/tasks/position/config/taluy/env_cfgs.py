@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
@@ -38,13 +36,13 @@ def make_taluy_position_env_cfg(
     *,
     num_envs: int = 1,
     episode_length_s: float = 30.0,
-    command_resampling_time_s: tuple[float, float] = (6.0, 12.0),
-    command_pos_x_range_m: tuple[float, float] = (-1.0, 1.0),
-    command_pos_y_range_m: tuple[float, float] = (-1.0, 1.0),
-    command_pos_z_range_m: tuple[float, float] = (-0.75, 0.75),
+    command_resampling_time_s: tuple[float, float] = (8.0, 14.0),
+    command_pos_x_range_m: tuple[float, float] = (-0.75, 0.75),
+    command_pos_y_range_m: tuple[float, float] = (-0.75, 0.75),
+    command_pos_z_range_m: tuple[float, float] = (-0.50, 0.50),
     command_roll_range_rad: tuple[float, float] = (0.0, 0.0),
     command_pitch_range_rad: tuple[float, float] = (0.0, 0.0),
-    command_yaw_range_rad: tuple[float, float] = (-math.pi, math.pi),
+    command_yaw_range_rad: tuple[float, float] = (-2.0, 2.0),
     reset_pos_x_range_m: tuple[float, float] = (-0.30, 0.30),
     reset_pos_y_range_m: tuple[float, float] = (-0.30, 0.30),
     reset_pos_z_range_m: tuple[float, float] = (-0.20, 0.20),
@@ -118,17 +116,17 @@ def make_taluy_position_env_cfg(
 
     cfg.rewards["action_l2"] = RewardTermCfg(
         func=mdp.body_wrench_action_l2,
-        weight=-2.0e-3,
+        weight=-4.0e-3,
         params={"action_name": "body_wrench"},
     )
     cfg.rewards["action_rate_l2"] = RewardTermCfg(
         func=mdp.body_wrench_action_rate_l2,
-        weight=-1.0e-2,
+        weight=-2.0e-2,
         params={"action_name": "body_wrench"},
     )
     cfg.rewards["saturation"] = RewardTermCfg(
         func=mdp.body_wrench_saturation_penalty,
-        weight=-5.0e-2,
+        weight=-1.0e-1,
         params={"action_name": "body_wrench"},
     )
 
