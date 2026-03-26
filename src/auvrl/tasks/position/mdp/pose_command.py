@@ -412,7 +412,7 @@ class UniformPoseCommandCfg(CommandTermCfg):
 
     @dataclass
     class VizCfg:
-        ghost_alpha: float = 0.3
+        ghost_alpha: float = 0.5
         frame_scale: float = 0.25
         frame_axis_radius: float = 0.008
         error_arrow_color: tuple[float, float, float, float] = (0.95, 0.4, 0.1, 0.9)
