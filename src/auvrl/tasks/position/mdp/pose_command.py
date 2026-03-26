@@ -12,6 +12,7 @@ from auvrl.actuator.thruster_actuator import THRUSTER_LOCAL_AXIS
 from mjlab.entity import Entity
 from mjlab.managers.command_manager import CommandTerm, CommandTermCfg
 from mjlab.utils.lab_api.math import (
+    euler_xyz_from_quat,
     matrix_from_quat,
     quat_box_minus,
     quat_from_euler_xyz,
@@ -45,6 +46,26 @@ class UniformPoseCommand(CommandTerm):
             self.num_envs,
             device=self.device,
         )
+        self.metrics["error_position_xy"] = torch.zeros(
+            self.num_envs,
+            device=self.device,
+        )
+        self.metrics["error_position_z"] = torch.zeros(
+            self.num_envs,
+            device=self.device,
+        )
+        self.metrics["error_yaw"] = torch.zeros(
+            self.num_envs,
+            device=self.device,
+        )
+        self.metrics["linear_speed"] = torch.zeros(self.num_envs, device=self.device)
+        self.metrics["angular_speed"] = torch.zeros(self.num_envs, device=self.device)
+        self.metrics["action_l2"] = torch.zeros(self.num_envs, device=self.device)
+        self.metrics["action_rate_l2"] = torch.zeros(self.num_envs, device=self.device)
+        self.metrics["saturation_fraction"] = torch.zeros(
+            self.num_envs,
+            device=self.device,
+        )
 
         self._joystick_enabled: viser.GuiCheckboxHandle | None = None
         self._joystick_sliders: list[viser.GuiSliderHandle] = []
@@ -69,6 +90,37 @@ class UniformPoseCommand(CommandTerm):
             quat_unique(self.pose_command[:, 3:7]),
             current_quat,
         )
+        desired_roll, desired_pitch, desired_yaw = euler_xyz_from_quat(
+            quat_unique(self.pose_command[:, 3:7]),
+        )
+        current_roll, current_pitch, current_yaw = euler_xyz_from_quat(current_quat)
+        del desired_roll, desired_pitch, current_roll, current_pitch
+        yaw_error = torch.atan2(
+            torch.sin(desired_yaw - current_yaw),
+            torch.cos(desired_yaw - current_yaw),
+        )
+        lin_vel_b = self.robot.data.root_link_lin_vel_b
+        ang_vel_b = self.robot.data.root_link_ang_vel_b
+
+        try:
+            wrench_term = self._env.action_manager.get_term("body_wrench")
+        except KeyError:
+            wrench_term = None
+        if isinstance(wrench_term, BodyWrenchAction):
+            action_l2 = torch.mean(torch.square(wrench_term.raw_action), dim=1)
+            action_rate_l2 = torch.mean(
+                torch.square(
+                    self._env.action_manager.action
+                    - self._env.action_manager.prev_action
+                ),
+                dim=1,
+            )
+            saturation_fraction = wrench_term.step_saturation_fraction
+        else:
+            zeros = torch.zeros(self.num_envs, device=self.device)
+            action_l2 = zeros
+            action_rate_l2 = zeros
+            saturation_fraction = zeros
 
         self.metrics["error_position"] += (
             torch.linalg.norm(
@@ -84,6 +136,22 @@ class UniformPoseCommand(CommandTerm):
             )
             / max_command_steps
         )
+        self.metrics["error_position_xy"] += (
+            torch.linalg.norm(position_error[:, :2], dim=1) / max_command_steps
+        )
+        self.metrics["error_position_z"] += (
+            torch.abs(position_error[:, 2]) / max_command_steps
+        )
+        self.metrics["error_yaw"] += torch.abs(yaw_error) / max_command_steps
+        self.metrics["linear_speed"] += (
+            torch.linalg.norm(lin_vel_b, dim=1) / max_command_steps
+        )
+        self.metrics["angular_speed"] += (
+            torch.linalg.norm(ang_vel_b, dim=1) / max_command_steps
+        )
+        self.metrics["action_l2"] += action_l2 / max_command_steps
+        self.metrics["action_rate_l2"] += action_rate_l2 / max_command_steps
+        self.metrics["saturation_fraction"] += saturation_fraction / max_command_steps
 
     def _resample_command(self, env_ids: torch.Tensor) -> None:
         if len(env_ids) == 0:
