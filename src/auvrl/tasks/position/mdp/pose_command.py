@@ -269,6 +269,7 @@ class UniformPoseCommand(CommandTerm):
             return
 
         commands = self.command.cpu().numpy()
+        env_origins_ws = self._env.scene.env_origins.cpu().numpy()
         base_pos_ws = self.robot.data.root_link_pos_w.cpu().numpy()
         base_quat_w = self.robot.data.root_link_quat_w
         base_mat_ws = matrix_from_quat(base_quat_w).cpu().numpy()
@@ -308,7 +309,7 @@ class UniformPoseCommand(CommandTerm):
             base_pos_w = base_pos_ws[env_idx]
             base_mat_w = base_mat_ws[env_idx]
             command = commands[env_idx]
-            desired_pos = command[:3]
+            desired_pos = command[:3] + env_origins_ws[env_idx]
             desired_mat_w = desired_mat_ws[env_idx]
 
             if np.linalg.norm(base_pos_w) < 1e-6:
@@ -320,7 +321,7 @@ class UniformPoseCommand(CommandTerm):
             qpos[3:7] = command[3:7]
             visualizer.add_ghost_mesh(
                 qpos=qpos,
-                model=self.robot.data.model,
+                model=self._env.sim.mj_model,
                 alpha=viz.ghost_alpha,
             )
 
