@@ -50,6 +50,7 @@ def _taluy_spec():
 def make_taluy_base_env_cfg(
     *,
     action_space: TaluyActionSpace = "body_wrench",
+    decimation: int = 4,
     thruster_voltage_event_mode: EventMode = "disabled",
     thruster_voltage_range_v: tuple[float, float] = (16.0, 16.0),
     current_event_mode: EventMode = "disabled",
@@ -200,7 +201,7 @@ def make_taluy_base_env_cfg(
         terminations=terminations,
         viewer=viewer,
         sim=sim,
-        decimation=4,
+        decimation=decimation,
         episode_length_s=20.0,
     )
 

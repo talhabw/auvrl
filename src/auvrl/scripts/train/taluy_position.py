@@ -105,6 +105,12 @@ def _parse_args() -> argparse.Namespace:
         help="Episode horizon in seconds.",
     )
     parser.add_argument(
+        "--decimation",
+        type=int,
+        default=4,
+        help="Action hold factor. With 0.002 s physics dt, 4 means 125 Hz and 8 means 62.5 Hz.",
+    )
+    parser.add_argument(
         "--disable-curriculum",
         action="store_true",
         help="Disable the default command/reset curriculum.",
@@ -163,6 +169,8 @@ def main() -> None:
         raise SystemExit("--num-envs must be positive.")
     if args.iterations <= 0:
         raise SystemExit("--iterations must be positive.")
+    if args.decimation <= 0:
+        raise SystemExit("--decimation must be positive.")
 
     os.environ.setdefault("MUJOCO_GL", "egl")
     configure_torch_backends()
@@ -170,6 +178,7 @@ def main() -> None:
     env_cfg = make_taluy_position_env_cfg(
         num_envs=num_envs,
         episode_length_s=args.episode_length_s,
+        decimation=args.decimation,
         curriculum_enabled=not args.disable_curriculum,
         thruster_voltage_event_mode=args.thruster_voltage_event_mode,
         current_event_mode=args.current_event_mode,
@@ -201,7 +210,7 @@ def main() -> None:
     print("Starting Taluy MJLab PPO position training")
     print(
         f"device={device} num_envs={num_envs} iterations={agent_cfg.max_iterations} "
-        f"num_steps_per_env={agent_cfg.num_steps_per_env}"
+        f"num_steps_per_env={agent_cfg.num_steps_per_env} decimation={args.decimation}"
     )
     print(
         "events: "

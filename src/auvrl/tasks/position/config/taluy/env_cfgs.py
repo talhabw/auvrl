@@ -70,6 +70,7 @@ def make_taluy_position_env_cfg(
     *,
     num_envs: int = 1,
     episode_length_s: float = 30.0,
+    decimation: int = 4,
     command_resampling_time_s: tuple[float, float] = (8.0, 14.0),
     command_pos_x_range_m: tuple[float, float] = (-0.75, 0.75),
     command_pos_y_range_m: tuple[float, float] = (-0.75, 0.75),
@@ -100,6 +101,7 @@ def make_taluy_position_env_cfg(
 ) -> ManagerBasedRlEnvCfg:
     robot_base_env_cfg = make_taluy_base_env_cfg(
         action_space="body_wrench",
+        decimation=decimation,
         thruster_voltage_event_mode=thruster_voltage_event_mode,
         thruster_voltage_range_v=thruster_voltage_range_v,
         current_event_mode=current_event_mode,
