@@ -1,0 +1,17 @@
+--- git commit ---
+8a384223eb4c57020817f5764ee6f9e7c3dd8277
+
+
+--- git status ---
+On branch position-tracking
+Your branch is up to date with 'origin/position-tracking'.
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	logs/rsl_rl/taluy_position_6d/2026-03-26_18-04-18_position_curriculum_settle_dec10_v1/
+	logs/rsl_rl/taluy_position_6d/2026-03-26_18-13-49_position_curriculum_settle_dec10_matched_rollout/
+
+nothing added to commit but untracked files present (use "git add" to track) 
+
+
+--- git diff ---
