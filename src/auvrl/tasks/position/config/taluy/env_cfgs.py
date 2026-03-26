@@ -210,7 +210,7 @@ def make_taluy_position_env_cfg(
     )
     cfg.rewards["action_rate_l2"] = RewardTermCfg(
         func=mdp.body_wrench_action_rate_l2,
-        weight=-2.0e-2,
+        weight=-0.1,
         params={"action_name": "body_wrench"},
     )
     cfg.rewards["settle_action_rate"] = RewardTermCfg(
