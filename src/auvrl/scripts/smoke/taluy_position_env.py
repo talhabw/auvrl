@@ -36,7 +36,10 @@ EXPECTED_REWARD_TERMS = {
     "linear_velocity_l2",
     "angular_velocity_l2",
     "action_l2",
+    "settle_linear_velocity",
+    "settle_angular_velocity",
     "action_rate_l2",
+    "settle_action_rate",
     "saturation",
 }
 COMMAND_POS_X_RANGE_M = (0.25, 0.25)

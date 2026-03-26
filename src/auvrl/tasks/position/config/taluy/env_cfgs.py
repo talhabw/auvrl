@@ -188,10 +188,38 @@ def make_taluy_position_env_cfg(
         weight=-4.0e-3,
         params={"action_name": "body_wrench"},
     )
+    cfg.rewards["settle_linear_velocity"] = RewardTermCfg(
+        func=mdp.settle_linear_velocity_near_goal,
+        weight=-1.5e-1,
+        params={
+            "command_name": "pose",
+            "position_std": 0.25,
+            "orientation_std": 0.30,
+        },
+    )
+    cfg.rewards["settle_angular_velocity"] = RewardTermCfg(
+        func=mdp.settle_angular_velocity_near_goal,
+        weight=-2.5e-1,
+        params={
+            "command_name": "pose",
+            "position_std": 0.25,
+            "orientation_std": 0.30,
+        },
+    )
     cfg.rewards["action_rate_l2"] = RewardTermCfg(
         func=mdp.body_wrench_action_rate_l2,
         weight=-2.0e-2,
         params={"action_name": "body_wrench"},
+    )
+    cfg.rewards["settle_action_rate"] = RewardTermCfg(
+        func=mdp.settle_action_rate_near_goal,
+        weight=-1.5e-1,
+        params={
+            "command_name": "pose",
+            "position_std": 0.25,
+            "orientation_std": 0.30,
+            "action_name": "body_wrench",
+        },
     )
     cfg.rewards["saturation"] = RewardTermCfg(
         func=mdp.body_wrench_saturation_penalty,
