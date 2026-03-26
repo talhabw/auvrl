@@ -79,12 +79,6 @@ class UniformPoseCommand(CommandTerm):
         return self.pose_command
 
     def _update_metrics(self) -> None:
-        max_command_time = max(
-            float(self.cfg.resampling_time_range[1]),
-            self._env.step_dt,
-        )
-        max_command_steps = max(max_command_time / max(self._env.step_dt, 1.0e-6), 1.0)
-
         current_pos_rel = self.robot.data.root_link_pos_w - self._env.scene.env_origins
         current_quat = quat_unique(self.robot.data.root_link_quat_w)
 
@@ -125,36 +119,43 @@ class UniformPoseCommand(CommandTerm):
             action_rate_l2 = zeros
             saturation_fraction = zeros
 
-        self.metrics["error_position"] += (
-            torch.linalg.norm(
-                position_error,
-                dim=1,
-            )
-            / max_command_steps
+        self.metrics["error_position"] += torch.linalg.norm(
+            position_error,
+            dim=1,
         )
-        self.metrics["error_orientation"] += (
-            torch.linalg.norm(
-                orientation_error,
-                dim=1,
-            )
-            / max_command_steps
+        self.metrics["error_orientation"] += torch.linalg.norm(
+            orientation_error,
+            dim=1,
         )
-        self.metrics["error_position_xy"] += (
-            torch.linalg.norm(position_error[:, :2], dim=1) / max_command_steps
+        self.metrics["error_position_xy"] += torch.linalg.norm(
+            position_error[:, :2], dim=1
         )
-        self.metrics["error_position_z"] += (
-            torch.abs(position_error[:, 2]) / max_command_steps
-        )
-        self.metrics["error_yaw"] += torch.abs(yaw_error) / max_command_steps
-        self.metrics["linear_speed"] += (
-            torch.linalg.norm(lin_vel_b, dim=1) / max_command_steps
-        )
-        self.metrics["angular_speed"] += (
-            torch.linalg.norm(ang_vel_b, dim=1) / max_command_steps
-        )
-        self.metrics["action_l2"] += action_l2 / max_command_steps
-        self.metrics["action_rate_l2"] += action_rate_l2 / max_command_steps
-        self.metrics["saturation_fraction"] += saturation_fraction / max_command_steps
+        self.metrics["error_position_z"] += torch.abs(position_error[:, 2])
+        self.metrics["error_yaw"] += torch.abs(yaw_error)
+        self.metrics["linear_speed"] += torch.linalg.norm(lin_vel_b, dim=1)
+        self.metrics["angular_speed"] += torch.linalg.norm(ang_vel_b, dim=1)
+        self.metrics["action_l2"] += action_l2
+        self.metrics["action_rate_l2"] += action_rate_l2
+        self.metrics["saturation_fraction"] += saturation_fraction
+
+    def reset(self, env_ids: torch.Tensor | slice | None) -> dict[str, float]:
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+        elif isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)[
+                env_ids
+            ]
+
+        episode_length = self._env.episode_length_buf[env_ids].float().clamp(min=1.0)
+        extras = {}
+        for metric_name, metric_value in self.metrics.items():
+            extras[metric_name] = torch.mean(
+                metric_value[env_ids] / episode_length
+            ).item()
+            metric_value[env_ids] = 0.0
+        self.command_counter[env_ids] = 0
+        self._resample(env_ids)
+        return extras
 
     def _resample_command(self, env_ids: torch.Tensor) -> None:
         if len(env_ids) == 0:
